@@ -1,0 +1,58 @@
+body {
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+.container {
+    max-width: 960px;
+}
+
+.main-content {
+    background-color: #ffffff;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+h1.text-center {
+    font-weight: 700;
+    color: #1a2c5b; /* A darker blue */
+}
+
+.form-label {
+    font-weight: 500;
+}
+
+.card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: 1px solid #e9ecef;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.card-title {
+    font-weight: 600;
+}
+
+.card-footer {
+    background-color: #f8f9fa;
+}
+
+/* Ensure videos are responsive and don't overflow the card */
+video.card-img-top,
+video.img-fluid {
+    width: 100%;
+    height: auto;
+    background-color: #000; /* Black background for letterboxing */
+}
+
+/* Specific styling for the edit section for better focus */
+#editSection {
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    border: 1px solid #dee2e6;
+}

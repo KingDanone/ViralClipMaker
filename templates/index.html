@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>ViralClipMaker - Site</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="main-content">
+            <h1 class="text-center">ViralClipMaker</h1>
+            <p class="text-center text-muted mb-4">Crie cortes virais de vídeos, classifique-os e edite para máxima viralização!</p>
+            
+            <div id="error-alert" class="alert alert-danger mt-3" style="display: none;" role="alert"></div>
+            
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="input_type" class="form-label">Fonte do Vídeo</label>
+                    <select class="form-select" id="input_type" name="input_type">
+                        <option value="url" selected>Link do YouTube</option>
+                        <option value="file">Arquivo Local</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="file_input" style="display: none;">
+                    <label for="file" class="form-label">Selecione o Vídeo</label>
+                    <input type="file" class="form-control" id="file" name="file" accept="video/*">
+                </div>
+                <div class="mb-3" id="url_input">
+                    <label for="url" class="form-label">Cole o Link do YouTube</label>
+                    <input type="url" class="form-control" id="url" name="url" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+                <div class="d-grid">
+                    <button type="submit" id="process-btn" class="btn btn-primary btn-lg">
+                        <span id="spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                        Gerar Cortes
+                    </button>
+                </div>
+            </form>
+            
+            <div id="results" class="mt-5" style="display: none;">
+                <h3 class="mb-4 text-center">Cortes Gerados</h3>
+                <div id="clipsList" class="row g-4">
+                    <!-- As cards dos clipes serão inseridas aqui pelo script.js -->
+                </div>
+            </div>
+            
+            <div id="editSection" class="mt-5" style="display: none;">
+                <h3 class="text-center mb-4">Editar Corte</h3>
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+                        <div id="editPreview" class="mb-3">
+                            <!-- O vídeo para edição aparecerá aqui -->
+                        </div>
+                        <div class="input-group mb-3">
+                            <input type="text" id="captionText" class="form-control" placeholder="Digite a legenda aqui...">
+                            <button id="editBtn" class="btn btn-success">Aplicar Edição e Baixar</button>
+                        </div>
+                        <div id="musicSuggestion" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
