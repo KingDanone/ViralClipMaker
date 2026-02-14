@@ -37,7 +37,9 @@ To get the project running locally, follow these steps:
     ```
 
 3.  **Install Dependencies**
-    Ensure you have `ffmpeg` installed on your system, as it is required by `moviepy`. Then, install the Python packages:
+    A aplicação é totalmente independente e portátil. Ela já inclui os binários necessários para o **ffmpeg** (via `imageio-ffmpeg`) e **Node.js** (via `nodejs-bin`), portanto você não precisa instalar nada no seu sistema operacional além do Python.
+
+    Instale os pacotes Python:
     ```bash
     pip install -r requirements.txt
     ```

@@ -4,23 +4,42 @@ import moviepy.editor as mp
 import yt_dlp
 import random
 import uuid
+import nodejs
+import imageio_ffmpeg
 
 def download_youtube_video(url, upload_folder):
     filename_template = os.path.join(upload_folder, f"{uuid.uuid4()}.mp4")
     
+    # Adiciona o binário do nodejs-bin ao PATH para o yt-dlp usar como runtime JS
+    node_bin_dir = os.path.dirname(nodejs.node.path)
+    if node_bin_dir not in os.environ['PATH']:
+        os.environ['PATH'] = node_bin_dir + os.pathsep + os.environ['PATH']
+
+    # Localiza o binário do ffmpeg que já vem no requirements (imageio-ffmpeg)
+    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+
     ydl_opts = {
-        # Request a pre-merged MP4 file, resolution <= 1080p
-        'format': 'best[ext=mp4][height<=1080]/best[ext=mp4]',
+        # Tenta baixar o melhor vídeo com áudio em formato mp4, limitando a 1080p
+        'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': filename_template,
         'noplaylist': True,
         'quiet': True,
+        'no_warnings': True,
+        'merge_output_format': 'mp4',
+        'ffmpeg_location': ffmpeg_path, # Usa o ffmpeg portátil
+        'js_runtimes': {'node': {}},
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+        try:
+            ydl.download([url])
+        except Exception as e:
+            raise RuntimeError(f"Falha no download do yt-dlp: {str(e)}")
         
-    if not os.path.exists(filename_template):
-        raise RuntimeError("yt-dlp failed to download the specified video format.")
+    if not os.path.exists(filename_template) or os.path.getsize(filename_template) == 0:
+        if os.path.exists(filename_template):
+            os.remove(filename_template)
+        raise RuntimeError("O download resultou em um arquivo vazio ou inexistente. Verifique a URL ou o suporte a JavaScript (dukpy).")
         
     return filename_template
 
