@@ -56,3 +56,7 @@ uploads/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Markdown files
+CLAUDE.md
+PROMPT_GEMINI_CLI.md

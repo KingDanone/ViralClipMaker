@@ -15,10 +15,7 @@ numpy==2.2.6
 opencv-python==4.12.0.88
 pillow==12.1.0
 proglog==0.1.12
-redis==7.1.0
 requests==2.32.5
-SpeechRecognition==3.14.5
-spotipy==2.25.2
 tqdm==4.67.1
 typing_extensions==4.15.0
 urllib3==2.6.3
@@ -26,3 +23,9 @@ Werkzeug==3.1.5
 yt-dlp==2026.02.04
 nodejs-bin==18.4.0a4
 yt-dlp-ejs==0.4.0
+
+# Phase 2 — Real transcription, scoring, face tracking
+faster-whisper
+librosa
+spacy
+mediapipe

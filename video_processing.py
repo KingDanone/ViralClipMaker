@@ -87,10 +87,8 @@ def generate_clips(video_path, cuts, upload_folder):
     video.close()
     return clips
 
-def add_captions_and_edit(clip_path):
+def add_captions_and_edit(clip_path, text="Texto viral!"):
     clip = mp.VideoFileClip(clip_path)
-    # Placeholder text, can be passed as an argument
-    text = "Texto viral!"
     txt_clip = mp.TextClip(text, fontsize=70, color='white').set_position('center').set_duration(clip.duration)
     edited_clip = mp.CompositeVideoClip([clip, txt_clip]).fx(mp.vfx.blackwhite)
     

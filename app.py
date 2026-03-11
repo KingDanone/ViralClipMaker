@@ -73,8 +73,11 @@ def process():
 
 @app.route('/edit', methods=['POST'])
 def edit():
-    clip_path = request.form.get('clip_path')
-    text = request.form.get('text', 'Texto viral!')
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Requisição inválida: esperado JSON.'}), 400
+    clip_path = data.get('clip_path')
+    text = data.get('text', 'Texto viral!')
     
     if not clip_path or not os.path.exists(clip_path):
         return jsonify({'error': 'O clipe original não foi encontrado.'})
@@ -85,15 +88,12 @@ def edit():
         print(f"Erro ao editar vídeo: {e}")
         return jsonify({'error': 'Erro ao aplicar a edição no clipe.'})
 
-    # Opcional: remover o clipe não editado após a edição
-    # if os.path.exists(clip_path):
-    #     os.remove(clip_path)
-
     return jsonify({'edited_path': edited_path})
 
 @app.route('/suggest_music', methods=['POST'])
 def suggest_music_route():
-    theme = request.form.get('theme')
+    data = request.get_json() or {}
+    theme = data.get('theme')
     music = suggest_music(theme)
     return jsonify({'music': music})
 
