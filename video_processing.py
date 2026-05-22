@@ -34,9 +34,13 @@ def generate_clips(video_path, segments, upload_folder, transcription=None, subt
         os.remove(raw_path)
 
         words = _words_in_range(transcription, start, end) if transcription else []
+        shifted = [
+            {"word": w["word"], "start": w["start"] - start, "end": w["end"] - start}
+            for w in words
+        ]
 
         final_path = os.path.join(upload_folder, f'clip_{uuid.uuid4()}.mp4')
-        add_word_captions(reframed_path, final_path, words, style=subtitle_style)
+        add_word_captions(reframed_path, final_path, shifted, style=subtitle_style)
         os.remove(reframed_path)
 
         clips.append({
