@@ -20,6 +20,29 @@ import importlib.util
 import argparse
 
 # ---------------------------------------------------------------------------
+# Auto-venv (executa tudo dentro da venv do projeto)
+# ---------------------------------------------------------------------------
+
+def _ensure_venv() -> None:
+    """Se não estiver dentro da venv do projeto, reexecuta com venv/bin/python."""
+    if sys.prefix != sys.base_prefix:
+        return  # já estamos na venv
+    venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "python")
+    if os.path.isfile(venv_python):
+        _print("Fora da venv detectado — reexecutando com venv/bin/python ...", "warn")
+        sys.stdout.flush()
+        os.execv(venv_python, [venv_python] + sys.argv)
+    _print(
+        "Execute o projeto dentro da venv:\n"
+        "    source venv/bin/activate\n"
+        "    pip install -r requirements.txt\n"
+        "    python run.py",
+        "err",
+    )
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -173,6 +196,7 @@ def main() -> None:
 
     print("\n🎬  ViralClipMaker — iniciando...\n")
 
+    _ensure_venv()
     check_python_version()
     check_dependencies()
     ensure_dirs()
