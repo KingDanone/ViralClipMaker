@@ -57,11 +57,13 @@ def process():
         return jsonify({'error': 'Vídeo inválido ou erro no download.'})
 
     whisper_model = request.form.get('whisper_model', 'tiny')
+    subtitle_style = request.form.get('subtitle_style', 'tiktok')
 
     try:
         transcription = transcribe(video_path, model_size=whisper_model)
         segments = detect_clips(transcription, video_path, num_clips=5)
-        clips = generate_clips(video_path, segments, app.config['UPLOAD_FOLDER'])
+        clips = generate_clips(video_path, segments, app.config['UPLOAD_FOLDER'],
+                               transcription=transcription, subtitle_style=subtitle_style)
     except Exception as e:
         print(f"Erro ao processar vídeo: {e}")
         if os.path.exists(video_path):
