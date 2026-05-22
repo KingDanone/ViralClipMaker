@@ -1,55 +1,84 @@
 # ViralClipMaker
 
-ViralClipMaker is a web-based application designed to automatically generate short, "viral-style" video clips from longer videos. Users can provide a YouTube link or upload a local video file, and the application will process it to find potentially interesting segments, generate clips, and provide tools for basic editing.
+Open-source, 100% local alternative to Opus Clip.  
+Transforms long videos into short viral clips (TikTok, Reels, Shorts) with captions, reframe, and virality scoring — all running on your machine, no cloud, no data upload.
 
 ## Features
 
-- **Video Input**: Supports video processing from both YouTube URLs and direct file uploads.
-- **Automatic Clip Generation**: Analyzes video duration to generate a set of shorter sub-clips.
-- **Virality Score**: Assigns a simulated "virality probability" to each generated clip.
-- **Video Previews**: Displays the generated clips in a modern, card-based layout with video players for instant preview.
-- **Simple Editing**: Allows users to add a text caption to any generated clip.
-- **Music Suggestions**: Provides viral music suggestions to accompany the clips.
-- **Download**: Users can download the final edited or unedited clips.
+- **Input**: YouTube URL or local video file upload
+- **Automatic clipping**: Splits long videos into short segments
+- **Virality score**: Rates each clip based on duration and simulated face/movement detection
+- **Preview**: HTML5 video players for each generated clip
+- **Simple editing**: Add centered text captions + black-and-white filter
+- **Music suggestions**: Random picks from a curated viral tracks list
+- **Download**: Individual clip download (original or edited)
 
-## Setup and Installation
+## Requirements
 
-To get the project running locally, follow these steps:
+- Python **3.10+**
+- ~75 MB free disk for the Whisper model (auto-downloaded on first run)
 
-1.  **Clone the Repository**
-    ```bash
-    git clone <your-repository-url>
-    cd ViralClipMaker
-    ```
+No system-wide FFmpeg or Node.js installation required. Both are bundled via Python packages (`imageio-ffmpeg`, `nodejs-bin`).
 
-2.  **Create and Activate a Virtual Environment**
-
-    For macOS/Linux:
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-    For Windows:
-    ```bash
-    python -m venv venv
-    .\venv\Scripts\activate
-    ```
-
-3.  **Install Dependencies**
-    A aplicação é totalmente independente e portátil. Ela já inclui os binários necessários para o **ffmpeg** (via `imageio-ffmpeg`) e **Node.js** (via `nodejs-bin`), portanto você não precisa instalar nada no seu sistema operacional além do Python.
-
-    Instale os pacotes Python:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-## How to Run
-
-With your virtual environment activated and dependencies installed, you can start the Flask development server:
+## Quick Start
 
 ```bash
-python3 app.py
+git clone https://github.com/your-username/ViralClipMaker.git
+cd ViralClipMaker
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python run.py
 ```
 
-Open your web browser and navigate to `http://127.0.0.1:5000` to use the application.
+The browser will open at `http://localhost:5000` automatically.
+
+### `run.py` options
+
+| Flag | Description |
+|---|---|
+| `--no-browser` | Don't open the browser automatically |
+| `--port PORT` | Server port (default: 5000) |
+| `--whisper-model {tiny,base,small,medium,large-v2,large-v3}` | Whisper model size (default: tiny) |
+
+## Project Status
+
+ViralClipMaker is in **active development** (Phase 1 — Foundation).
+
+### What works
+- YouTube download via `yt-dlp` with bundled Node.js runtime
+- Local file upload
+- Video splitting into 5 segments
+- Clip preview and download
+- Basic caption editing (static text, black-and-white filter)
+- Music suggestion
+- Cross-platform portability (Windows, macOS, Linux)
+
+### What's coming
+- **Phase 2**: Real transcription (faster-whisper), actual virality scoring (NLP + audio energy)
+- **Phase 3**: TikTok 9:16 reframe, word-by-word animated captions, face tracking
+- **Phase 4**: Real-time progress via SSE, project history
+- **Phase 5**: Advanced features (batch mode, CLI, Ollama integration)
+
+## Project Structure
+
+```
+ViralClipMaker/
+├── app.py                 # Flask server, routes
+├── video_processing.py    # Download, clip analysis, editing
+├── core/
+│   ├── __init__.py
+│   └── runtime.py         # Platform detection, binary resolution
+├── run.py                 # Single entry point launcher
+├── requirements.txt
+├── musicas_virais.json    # Music track list
+├── static/                # Frontend assets (CSS, JS)
+├── templates/             # HTML templates
+├── models/                # Whisper models (auto-downloaded)
+├── uploads/               # Temp uploads and generated clips
+└── outputs/               # Future: exported clips
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
