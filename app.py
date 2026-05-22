@@ -82,13 +82,13 @@ def edit():
     text = data.get('text', 'Texto viral!')
     
     if not clip_path or not os.path.exists(clip_path):
-        return jsonify({'error': 'O clipe original não foi encontrado.'})
+        return jsonify({'error': 'O clipe original não foi encontrado.'}), 404
 
     try:
         edited_path = add_captions_and_edit(clip_path, text)
     except Exception as e:
         print(f"Erro ao editar vídeo: {e}")
-        return jsonify({'error': 'Erro ao aplicar a edição no clipe.'})
+        return jsonify({'error': f'Erro ao aplicar a edição no clipe: {e}'}), 500
 
     return jsonify({'edited_path': edited_path})
 

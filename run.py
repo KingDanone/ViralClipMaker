@@ -160,11 +160,13 @@ def start_server(open_browser: bool = True, port: int = 5000) -> None:
 
     _print(f"Iniciando servidor em {url}  (Ctrl+C para encerrar)", "info")
 
-    # Importar e rodar a aplicação Flask
-    # Mantemos compatibilidade com o app.py na raiz por enquanto.
     from app import app as flask_app
 
-    flask_app.run(host="0.0.0.0", port=port, debug=False)
+    try:
+        from waitress import serve
+        serve(flask_app, host="0.0.0.0", port=port)
+    except ImportError:
+        flask_app.run(host="0.0.0.0", port=port, debug=False)
 
 
 # ---------------------------------------------------------------------------

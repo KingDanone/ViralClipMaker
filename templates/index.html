@@ -31,7 +31,12 @@
                     <input type="url" class="form-control" id="url" name="url" placeholder="https://www.youtube.com/watch?v=...">
                 </div>
                 <div class="mb-3">
-                    <label for="whisper_model" class="form-label">Modelo de Transcrição</label>
+                    <label for="whisper_model" class="form-label">
+                        Modelo de Transcrição
+                        <span class="text-muted small fw-normal" tabindex="0" data-bs-toggle="tooltip" title="Modelos maiores são mais precisos mas mais lentos. Tiny é ideal para testes, Small para resultados melhores.">
+                            ⓘ
+                        </span>
+                    </label>
                     <select class="form-select" id="whisper_model" name="whisper_model">
                         <option value="tiny" selected>Tiny (rápido, ~75MB)</option>
                         <option value="base">Base (~142MB)</option>
