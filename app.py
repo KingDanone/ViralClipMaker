@@ -3,9 +3,10 @@ import os
 import json
 import uuid
 import random
+from core.downloader import download_video
+from core.transcriber import transcribe
+from core.clip_detector import detect_clips
 from video_processing import (
-    download_youtube_video,
-    analyze_video_for_cuts,
     generate_clips,
     add_captions_and_edit
 )
@@ -39,7 +40,7 @@ def process():
     if input_type == 'url':
         url = request.form.get('url')
         try:
-            video_path = download_youtube_video(url, app.config['UPLOAD_FOLDER'])
+            video_path = download_video(url, app.config['UPLOAD_FOLDER'])
         except Exception as e:
             print(f"Erro ao baixar vídeo do YouTube: {e}")
             return jsonify({'error': 'Erro ao baixar o vídeo do YouTube. A URL pode ser inválida ou o vídeo pode ter restrições.'})
@@ -54,21 +55,22 @@ def process():
 
     if not video_path or not os.path.exists(video_path):
         return jsonify({'error': 'Vídeo inválido ou erro no download.'})
-    
+
+    whisper_model = request.form.get('whisper_model', 'tiny')
+
     try:
-        cuts = analyze_video_for_cuts(video_path)
-        clips = generate_clips(video_path, cuts, app.config['UPLOAD_FOLDER'])
+        transcription = transcribe(video_path, model_size=whisper_model)
+        segments = detect_clips(transcription, video_path, num_clips=5)
+        clips = generate_clips(video_path, segments, app.config['UPLOAD_FOLDER'])
     except Exception as e:
         print(f"Erro ao processar vídeo: {e}")
-        # Limpar vídeo original em caso de falha no processamento
         if os.path.exists(video_path):
             os.remove(video_path)
-        return jsonify({'error': 'Erro ao processar o vídeo. O arquivo pode estar corrompido.'})
+        return jsonify({'error': f'Erro ao processar o vídeo: {e}'})
 
-    # Limpar vídeo original
     if os.path.exists(video_path):
         os.remove(video_path)
-    
+
     return jsonify({'clips': clips})
 
 @app.route('/edit', methods=['POST'])

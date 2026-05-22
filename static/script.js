@@ -76,6 +76,10 @@ function displayClips(clips) {
         const cardColumn = document.createElement('div');
         cardColumn.className = 'col-md-6 col-lg-4';
 
+        const scoreColor = clip.prob >= 70 ? 'success' : clip.prob >= 40 ? 'warning' : 'danger';
+        const bd = clip.breakdown || {};
+        const hookIcon = bd.hook ? '🔗 Sim' : '—';
+
         cardColumn.innerHTML = `
             <div class="card h-100 shadow-sm">
                 <video src="${videoUrl}" class="card-img-top" controls preload="metadata"></video>
@@ -83,10 +87,16 @@ function displayClips(clips) {
                     <h5 class="card-title">Corte ${index + 1}</h5>
                     <p class="card-text mb-2">
                         <strong>Viral Score:</strong> 
-                        <span class="badge bg-success">${clip.prob}%</span>
+                        <span class="badge bg-${scoreColor} fs-6">${clip.prob}%</span>
                     </p>
+                    <div class="small text-muted mb-2">
+                        <div>🔥 Sentimento: ${(bd.sentiment * 100).toFixed(0)}%</div>
+                        <div>🎵 Energia: ${(bd.energy * 100).toFixed(0)}%</div>
+                        <div>🎯 Hook: ${hookIcon}</div>
+                        <div>💬 Densidade: ${(bd.density * 100).toFixed(0)}%</div>
+                    </div>
                     <p class="card-text text-muted">
-                        <strong>Duração:</strong> ${Math.round(clip.duration)}s
+                        <strong>Duração:</strong> ${clip.duration}s
                     </p>
                 </div>
                 <div class="card-footer bg-white border-top-0 pb-3">

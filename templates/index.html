@@ -30,6 +30,14 @@
                     <label for="url" class="form-label">Cole o Link do YouTube</label>
                     <input type="url" class="form-control" id="url" name="url" placeholder="https://www.youtube.com/watch?v=...">
                 </div>
+                <div class="mb-3">
+                    <label for="whisper_model" class="form-label">Modelo de Transcrição</label>
+                    <select class="form-select" id="whisper_model" name="whisper_model">
+                        <option value="tiny" selected>Tiny (rápido, ~75MB)</option>
+                        <option value="base">Base (~142MB)</option>
+                        <option value="small">Small (~466MB, recomendado)</option>
+                    </select>
+                </div>
                 <div class="d-grid">
                     <button type="submit" id="process-btn" class="btn btn-primary btn-lg">
                         <span id="spinner" class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
