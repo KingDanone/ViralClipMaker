@@ -8,19 +8,15 @@ from textblob import TextBlob
 
 logger = logging.getLogger(__name__)
 
-# Padrões de hooks virais (inglês e português)
 _HOOK_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        # Perguntas
         r"você (sabia|viu|conhece|ja ouviu)",
         r"(what|why|how|did you|have you|do you|are you)",
         r"você (sabia|viu|conhece|já ouviu)",
-        # Intensifiers
-    r"(never|always|everyone|nobody|impossible|in[cC]r[ií]vel|amei|odeio|perfeito)",
+        r"(never|always|everyone|nobody|impossible|in[cC]r[ií]vel|amei|odeio|perfeito)",
         r"(you won't believe|you need to see|wait till|watch this)",
         r"(você não vai acreditar|você precisa ver|olha isso|espera até)",
-        # Superlativos
         r"(the (best|worst|biggest|most|only))",
         r"(o (melhor|pior|maior|único))",
         r"(this is (crazy|insane|amazing|unreal|wild))",
@@ -29,10 +25,33 @@ _HOOK_PATTERNS = [
 ]
 
 
-def _calc_audio_energy(video_path: str, sr: int = 22050) -> np.ndarray:
-    """Carrega o áudio de um vídeo e retorna o envelope RMS frame a frame."""
+def _audio_to_numpy(video_path: str, sr: int = 22050) -> np.ndarray:
+    """Extrai áudio via FFmpeg pipe para numpy array (sem arquivo temporário)."""
+    import subprocess
+    from core.runtime import get_ffmpeg_path
+
+    ffmpeg = get_ffmpeg_path()
+    cmd = [
+        ffmpeg, "-i", video_path,
+        "-vn",
+        "-f", "s16le", "-acodec", "pcm_s16le",
+        "-ar", str(sr), "-ac", "1",
+        "-",
+    ]
     try:
+        proc = subprocess.run(cmd, capture_output=True, check=True)
+        audio = np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+        return audio
+    except Exception as exc:
+        logger.warning("FFmpeg audio pipe falhou: %s — tentando librosa", exc)
         y, _ = librosa.load(video_path, sr=sr, mono=True)
+        return y
+
+
+def _calc_audio_energy(video_path: str, sr: int = 22050):
+    """Carrega áudio via FFmpeg pipe e retorna envelope RMS."""
+    try:
+        y = _audio_to_numpy(video_path, sr=sr)
         hop_length = 512
         rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop_length)[0]
         return rms, sr, hop_length
@@ -60,7 +79,6 @@ def _sentiment_score(text: str) -> float:
     if not text or not text.strip():
         return 0.5
     blob = TextBlob(text)
-    # polarity vai de -1 a 1; mapeamos para 0-1
     return (blob.sentiment.polarity + 1) / 2
 
 
@@ -83,7 +101,6 @@ def _density_score(words: list) -> float:
     if duration <= 0:
         return 0.5
     wps = total_words / duration
-    # 3.5 p/s é considerado ideal; normalizar com sigmoid suave
     return float(1.0 / (1.0 + np.exp(-0.8 * (wps - 3.0))))
 
 
@@ -158,9 +175,8 @@ def detect_clips(
 
     rms, sr, hop_length = _calc_audio_energy(video_path)
 
-    # Janelas deslizantes de clip_duration segundos
     candidates = []
-    step = clip_duration / 2  # 50% de overlap
+    step = clip_duration / 2
     t = 0.0
     while t + clip_duration <= duration:
         start = t
@@ -189,7 +205,6 @@ def detect_clips(
         })
         t += step
 
-    # Ordenar por score descendente e pegar os top N
     candidates.sort(key=lambda c: c["score"], reverse=True)
     top = candidates[:num_clips]
 

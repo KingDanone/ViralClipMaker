@@ -1,3 +1,4 @@
+import re
 import subprocess
 import logging
 
@@ -5,8 +6,14 @@ from core.runtime import get_ffmpeg_path
 
 logger = logging.getLogger(__name__)
 
+_dim_cache: dict[str, tuple[int, int]] = {}
 
-def _probe_aspect(video_path: str) -> tuple[int, int]:
+
+def probe_dimensions(video_path: str) -> tuple[int, int]:
+    """Retorna (largura, altura) do vídeo. Cacheia resultado para evitar probes repetidos."""
+    if video_path in _dim_cache:
+        return _dim_cache[video_path]
+
     ffmpeg = get_ffmpeg_path()
     cmd = [
         ffmpeg, "-i", video_path,
@@ -21,30 +28,63 @@ def _probe_aspect(video_path: str) -> tuple[int, int]:
                 p = p.strip()
                 if "x" in p and any(c.isdigit() for c in p):
                     try:
-                        w, h = p.split("x")[:2]
-                        return int(w.strip()), int(h.strip())
-                    except ValueError:
+                        match = re.search(r'(\d{2,})x(\d{2,})', p)
+                        if match:
+                            w_num = int(match.group(1))
+                            h_num = int(match.group(2))
+                            _dim_cache[video_path] = (w_num, h_num)
+                            return w_num, h_num
+                    except (ValueError, AttributeError):
                         pass
+
+    _dim_cache[video_path] = (1080, 1920)
     return 1080, 1920
 
 
-def _build_filter_crop(in_w: int, in_h: int, out_w: int, out_h: int) -> str:
+_probe_aspect = probe_dimensions
+
+
+def _build_filter_crop(
+    in_w: int,
+    in_h: int,
+    out_w: int,
+    out_h: int,
+    *,
+    x_offset: float | None = None,
+    y_offset: float | None = None,
+    zoom_factor: float = 1.0,
+) -> str:
     target_ratio = out_w / out_h
     input_ratio = in_w / in_h
 
-    if abs(input_ratio - target_ratio) < 0.01:
+    if abs(input_ratio - target_ratio) < 0.01 and zoom_factor <= 1.0:
         return f"scale={out_w}:{out_h}"
 
     if input_ratio > target_ratio:
         crop_w = int(in_h * target_ratio)
         crop_h = in_h
-        x = (in_w - crop_w) // 2
-        y = 0
     else:
         crop_w = in_w
         crop_h = int(in_w / target_ratio)
-        x = 0
+
+    if zoom_factor > 1.0:
+        crop_w = int(crop_w / zoom_factor)
+        crop_h = int(crop_h / zoom_factor)
+
+    crop_w = min(crop_w, in_w)
+    crop_h = min(crop_h, in_h)
+
+    if x_offset is None:
+        x = (in_w - crop_w) // 2
+    else:
+        max_x = in_w - crop_w
+        x = int(max_x * max(0.0, min(1.0, x_offset)))
+
+    if y_offset is None:
         y = (in_h - crop_h) // 2
+    else:
+        max_y = in_h - crop_h
+        y = int(max_y * max(0.0, min(1.0, y_offset)))
 
     return f"crop={crop_w}:{crop_h}:{x}:{y},scale={out_w}:{out_h}"
 
@@ -84,7 +124,7 @@ def reframe_9_16(
     if method not in _METHODS:
         method = "crop"
 
-    in_w, in_h = _probe_aspect(video_path)
+    in_w, in_h = probe_dimensions(video_path)
     filter_str = _METHODS[method](in_w, in_h, output_width, output_height)
 
     ffmpeg = get_ffmpeg_path()
