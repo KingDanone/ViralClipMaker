@@ -1,58 +1,61 @@
-body {
-    background-color: #f0f2f5;
-    color: #333;
+/* ViralClipMaker — Custom Styles */
+
+/* Alpine.js cloak — hide elements until Alpine initializes */
+[x-cloak] { display: none !important; }
+
+/* Alpine.js collapse plugin */
+[x-collapse] {
+    overflow: hidden;
 }
 
-.container {
-    max-width: 960px;
+[x-collapse].collapsing {
+    transition: height 0.2s ease-out;
 }
 
-.main-content {
-    background-color: #ffffff;
-    padding: 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+/* Smooth transitions */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-h1.text-center {
-    font-weight: 700;
-    color: #1a2c5b; /* A darker blue */
+/* Custom scrollbar for dark mode */
+.dark ::-webkit-scrollbar {
+    width: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+.dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
 }
 
-.form-label {
-    font-weight: 500;
+/* Range slider thumb styling */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #7c3aed;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #7c3aed;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
-.card {
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    border: 1px solid #e9ecef;
-}
-
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-.card-title {
-    font-weight: 600;
-}
-
-.card-footer {
-    background-color: #f8f9fa;
-}
-
-/* Ensure videos are responsive and don't overflow the card */
-video.card-img-top,
-video.img-fluid {
-    width: 100%;
-    height: auto;
-    background-color: #000; /* Black background for letterboxing */
-}
-
-/* Specific styling for the edit section for better focus */
-#editSection {
-    background-color: #f8f9fa;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    border: 1px solid #dee2e6;
+/* Video aspect ratio for clips */
+.aspect-9-16 {
+    aspect-ratio: 9 / 16;
 }
