@@ -31,3 +31,4 @@ librosa
 spacy
 mediapipe
 textblob
+soundfile
