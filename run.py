@@ -143,8 +143,8 @@ def download_whisper_model(model_size: str = "tiny") -> None:
         )
 
 
-def start_server(open_browser: bool = True, port: int = 5000) -> None:
-    """Inicia o Flask e, opcionalmente, abre o browser."""
+def start_server(open_browser: bool = True, port: int = 5000, use_fastapi: bool = False) -> None:
+    """Inicia o servidor (Flask ou FastAPI) e opcionalmente abre o browser."""
     import threading
     import webbrowser
     import time
@@ -153,20 +153,28 @@ def start_server(open_browser: bool = True, port: int = 5000) -> None:
 
     if open_browser:
         def _open():
-            time.sleep(1.5)  # Dá tempo para o Flask subir
+            time.sleep(1.5)
             webbrowser.open(url)
-
         threading.Thread(target=_open, daemon=True).start()
 
     _print(f"Iniciando servidor em {url}  (Ctrl+C para encerrar)", "info")
 
-    from app import app as flask_app
+    if use_fastapi:
+        try:
+            import uvicorn
+            from app_fastapi import app as fastapi_app
+            uvicorn.run(fastapi_app, host="0.0.0.0", port=port, log_level="info")
+        except ImportError:
+            _print("FastAPI/uvicorn não instalado. Usando Flask.", "warn")
+            use_fastapi = False
 
-    try:
-        from waitress import serve
-        serve(flask_app, host="0.0.0.0", port=port)
-    except ImportError:
-        flask_app.run(host="0.0.0.0", port=port, debug=False)
+    if not use_fastapi:
+        from app import app as flask_app
+        try:
+            from waitress import serve
+            serve(flask_app, host="0.0.0.0", port=port)
+        except ImportError:
+            flask_app.run(host="0.0.0.0", port=port, debug=False)
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +202,11 @@ def main() -> None:
         choices=["tiny", "base", "small", "medium", "large-v2", "large-v3"],
         help="Tamanho do modelo Whisper a baixar/usar (padrão: tiny)",
     )
+    parser.add_argument(
+        "--fastapi",
+        action="store_true",
+        help="Usar FastAPI com SSE (progresso em tempo real)",
+    )
     args = parser.parse_args()
 
     print("\n🎬  ViralClipMaker — iniciando...\n")
@@ -205,7 +218,7 @@ def main() -> None:
     download_whisper_model(args.whisper_model)
 
     print()
-    start_server(open_browser=not args.no_browser, port=args.port)
+    start_server(open_browser=not args.no_browser, port=args.port, use_fastapi=args.fastapi)
 
 
 if __name__ == "__main__":

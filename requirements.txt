@@ -24,6 +24,9 @@ yt-dlp==2026.02.04
 nodejs-bin==18.4.0a4
 yt-dlp-ejs==0.4.0
 waitress
+fastapi
+uvicorn
+python-multipart
 
 # Phase 2 — Real transcription, scoring, face tracking
 faster-whisper
