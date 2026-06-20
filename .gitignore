@@ -67,3 +67,9 @@ Thumbs.db
 # Markdown files
 CLAUDE.md
 PROMPT_GEMINI_CLI.md
+
+# AI memory system
+.mimocode/
+
+# User data
+history.json
