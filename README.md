@@ -1,33 +1,39 @@
 # ViralClipMaker
 
-Open-source, 100% local alternative to Opus Clip.  
+Open-source, 100% local alternative to Opus Clip.
 Transforms long videos into short viral clips (TikTok, Reels, Shorts) with captions, reframe, and virality scoring — all running on your machine, no cloud, no data upload.
 
 ## Features
 
 - **Input**: YouTube URL or local video file upload
-- **Automatic clipping**: Splits long videos into short segments
-- **Virality score**: Rates each clip based on duration and simulated face/movement detection
-- **Preview**: HTML5 video players for each generated clip
-- **Simple editing**: Add centered text captions + black-and-white filter
-- **Music suggestions**: Random picks from a curated viral tracks list
-- **Download**: Individual clip download (original or edited)
+- **AI Transcription**: faster-whisper with word-level timestamps
+- **Virality Score**: Multi-factor analysis (sentiment, audio energy, viral hooks, speech density)
+- **Smart Clipping**: Sliding window detection, top N segments by score
+- **9:16 Reframe**: Crop, letterbox, or blur padding for TikTok/Reels format
+- **Animated Captions**: Word-by-word karaoke subtitles (4 styles: TikTok, Bold, Neon, Minimal)
+- **Camera Tracking**: Auto-detect faces and follow them (MediaPipe)
+- **Crop Control**: Choose position (left/center/right/auto) and zoom (1.0x-2.0x)
+- **Resolution Presets**: TikTok 1080×1920, Reels 1080×1920, 720×1280
+- **Duration Presets**: 15s, 30s, 60s, 90s clips
+- **Export Subtitles**: Download .srt or .vtt files
+- **Batch Download**: Download all clips as .zip
+- **CLI**: Command-line interface for automation
+- **Dark/Light Mode**: Automatic based on system preference
+- **Project History**: Saves last 50 projects locally
 
 ## Requirements
 
 - Python **3.10+**
-- ~75 MB free disk for the Whisper model (auto-downloaded on first run)
+- ~75 MB free disk for Whisper model (auto-downloaded on first run)
+- 8GB RAM recommended
 
-No system-wide FFmpeg or Node.js installation required. Both are bundled via Python packages (`imageio-ffmpeg`, `nodejs-bin`).
+No system-wide FFmpeg or Node.js installation required.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/your-username/ViralClipMaker.git
 cd ViralClipMaker
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
 python run.py
 ```
 
@@ -39,45 +45,119 @@ The browser will open at `http://localhost:5000` automatically.
 |---|---|
 | `--no-browser` | Don't open the browser automatically |
 | `--port PORT` | Server port (default: 5000) |
-| `--whisper-model {tiny,base,small,medium,large-v2,large-v3}` | Whisper model size (default: tiny) |
+| `--whisper-model {tiny,base,small}` | Whisper model size (default: tiny) |
 
-## Project Status
+## CLI Usage
 
-ViralClipMaker is in **active development** (Phase 1 — Foundation).
+```bash
+# Basic usage
+python -m viralclip video.mp4
 
-### What works
-- YouTube download via `yt-dlp` with bundled Node.js runtime
-- Local file upload
-- Video splitting into 5 segments
-- Clip preview and download
-- Basic caption editing (static text, black-and-white filter)
-- Music suggestion
-- Cross-platform portability (Windows, macOS, Linux)
+# With options
+python -m viralclip video.mp4 --clips 5 --duration 30 --model small
 
-### What's coming
-- **Phase 2**: Real transcription (faster-whisper), actual virality scoring (NLP + audio energy)
-- **Phase 3**: TikTok 9:16 reframe, word-by-word animated captions, face tracking
-- **Phase 4**: Real-time progress via SSE, project history
-- **Phase 5**: Advanced features (batch mode, CLI, Ollama integration)
+# From YouTube
+python -m viralclip https://youtube.com/watch?v=... --output ./clips/
+
+# Custom resolution
+python -m viralclip video.mp4 --resolution 720x1280 --crop left --zoom 1.5
+```
+
+### CLI Options
+
+| Flag | Description | Default |
+|---|---|---|
+| `--clips, -n` | Number of clips to generate | 5 |
+| `--duration, -d` | Clip duration (15, 30, 60, 90) | 30 |
+| `--model, -m` | Whisper model (tiny, base, small) | tiny |
+| `--style, -s` | Subtitle style | tiktok |
+| `--crop` | Crop position (left, center, right, auto) | center |
+| `--zoom` | Zoom factor (1.0-2.0) | 1.0 |
+| `--resolution` | Output resolution WxH | 1080x1920 |
+| `--output, -o` | Output directory | output/ |
+
+## How It Works
+
+```
+[Input: YouTube URL or local file]
+    → 1. DOWNLOAD       (yt-dlp / upload)
+    → 2. TRANSCRIBE     (faster-whisper, word timestamps)
+    → 3. SCORE          (sentiment + energy + hooks + density)
+    → 4. SELECT         (top N segments by score)
+    → 5. REFRAME        (9:16 crop/scale)
+    → 6. CAPTIONS       (word-by-word ASS overlay)
+    → 7. EXPORT         (H.264, configurable resolution)
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Flask (Python) |
+| Transcription | faster-whisper |
+| Audio Analysis | librosa + FFmpeg |
+| NLP Scoring | TextBlob |
+| Face Detection | MediaPipe |
+| Video Processing | FFmpeg |
+| Frontend | Alpine.js + Tailwind CSS |
 
 ## Project Structure
 
 ```
 ViralClipMaker/
-├── app.py                 # Flask server, routes
-├── video_processing.py    # Download, clip analysis, editing
-├── core/
-│   ├── __init__.py
-│   └── runtime.py         # Platform detection, binary resolution
-├── run.py                 # Single entry point launcher
+├── app.py                  # Flask server, routes
+├── video_processing.py     # Pipeline orchestration
+├── run.py                  # Single entry point
 ├── requirements.txt
-├── musicas_virais.json    # Music track list
-├── static/                # Frontend assets (CSS, JS)
-├── templates/             # HTML templates
-├── models/                # Whisper models (auto-downloaded)
-├── uploads/               # Temp uploads and generated clips
-└── outputs/               # Future: exported clips
+├── musicas_virais.json     # Music track list
+│
+├── core/
+│   ├── runtime.py          # Platform detection, binary paths
+│   ├── transcriber.py      # faster-whisper + adaptive transcription
+│   ├── clip_detector.py    # Multi-factor virality scoring
+│   ├── video_editor.py     # 9:16 reframe (crop/letterbox/blur)
+│   ├── subtitle_renderer.py # Word-by-word ASS subtitles
+│   ├── subtitle_export.py  # SRT/VTT export
+│   ├── pipeline.py         # Unified FFmpeg pipeline
+│   ├── face_tracker.py     # MediaPipe face detection
+│   ├── auto_zoom.py        # Audio energy-based zoom
+│   └── downloader.py       # yt-dlp wrapper
+│
+├── viralclip/
+│   └── __main__.py         # CLI entry point
+│
+├── static/                 # Frontend assets
+├── templates/              # HTML templates
+├── models/                 # Whisper models (auto-downloaded)
+├── uploads/                # Temp uploads and clips
+└── outputs/                # Transcription cache
 ```
+
+## UI Modes
+
+- **Simple Mode**: Just upload + generate button
+- **Advanced Mode**: Access to all settings (model, duration, crop, zoom, style, resolution)
+
+## Troubleshooting
+
+### YouTube Downloads
+
+If downloads fail with "Sign in to confirm you're not a bot", try:
+
+1. Install "Get cookies.txt LOCALLY" browser extension
+2. Go to youtube.com and log in
+3. Export cookies to `youtube_cookies.txt` in project root
+
+### Whisper Model Download
+
+First run downloads the model automatically (~75MB for tiny). Subsequent runs use the cached model.
+
+### Performance
+
+- **Tiny model**: ~30s for 10min video (fast, less accurate)
+- **Small model**: ~2-5min for 10min video (slower, more accurate)
+- **Parallel clips**: Up to 2 clips processed simultaneously
+- **Pipeline**: Single FFmpeg encode per clip (3x faster than naive approach)
 
 ## License
 
