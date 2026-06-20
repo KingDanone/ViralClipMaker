@@ -11,7 +11,7 @@ import uuid
 import random
 import zipfile
 import logging
-import asyncio
+import time
 from io import BytesIO
 from datetime import datetime, timedelta
 from typing import Optional
@@ -465,7 +465,6 @@ def _resolve_video_source(source: str, input_type: str) -> str:
 @app.on_event("startup")
 async def startup():
     import threading
-    from datetime import datetime, timedelta
 
     def cleanup_uploads(max_age_hours=24, min_age_minutes=10):
         while True:
@@ -482,5 +481,4 @@ async def startup():
             except Exception:
                 pass
 
-    import time
     threading.Thread(target=cleanup_uploads, daemon=True).start()
