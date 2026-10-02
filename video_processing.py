@@ -1,105 +1,236 @@
 import os
-import cv2
-import moviepy.editor as mp
-import yt_dlp
-import random
 import uuid
-import nodejs
-import imageio_ffmpeg
+import logging
+import bisect
+import subprocess
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-def download_youtube_video(url, upload_folder):
-    filename_template = os.path.join(upload_folder, f"{uuid.uuid4()}.mp4")
-    
-    # Adiciona o binário do nodejs-bin ao PATH para o yt-dlp usar como runtime JS
-    node_bin_dir = os.path.dirname(nodejs.node.path)
-    if node_bin_dir not in os.environ['PATH']:
-        os.environ['PATH'] = node_bin_dir + os.pathsep + os.environ['PATH']
+from core.pipeline import export_clip
+from core.subtitle_renderer import generate_ass, generate_static_ass
+from core.subtitle_export import extract_clip_segments
+from core.runtime import get_ffmpeg_path
 
-    # Localiza o binário do ffmpeg que já vem no requirements (imageio-ffmpeg)
-    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+logger = logging.getLogger(__name__)
 
-    ydl_opts = {
-        # Tenta baixar o melhor vídeo com áudio em formato mp4, limitando a 1080p
-        'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'outtmpl': filename_template,
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'merge_output_format': 'mp4',
-        'ffmpeg_location': ffmpeg_path, # Usa o ffmpeg portátil
-        'js_runtimes': {'node': {}},
-    }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            ydl.download([url])
-        except Exception as e:
-            raise RuntimeError(f"Falha no download do yt-dlp: {str(e)}")
-        
-    if not os.path.exists(filename_template) or os.path.getsize(filename_template) == 0:
-        if os.path.exists(filename_template):
-            os.remove(filename_template)
-        raise RuntimeError("O download resultou em um arquivo vazio ou inexistente. Verifique a URL ou o suporte a JavaScript (dukpy).")
-        
-    return filename_template
+def _build_word_index(transcription: dict) -> tuple[list[dict], list[float]]:
+    """Constrói índice ordenado de palavras para busca binária."""
+    all_words = []
+    if not transcription:
+        return all_words, []
+    for seg in transcription.get("segments", []):
+        all_words.extend(seg.get("words", []))
+    all_words.sort(key=lambda w: w["start"])
+    starts = [w["start"] for w in all_words]
+    return all_words, starts
 
-def analyze_video_for_cuts(video_path, num_cuts=5):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError(f"Could not open video file: {video_path}")
-        
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = total_frames / fps
-    
-    cuts = []
-    if duration > 0:
-        for i in range(num_cuts):
-            start_time = random.uniform(0, max(0, duration - 30))
-            end_time = start_time + 30
-            cuts.append((start_time, end_time))
-    
-    cap.release()
-    return cuts
 
-def classify_viral_probability(cut_duration, has_faces=False, has_movement=False):
-    base_prob = 50
-    if 15 <= cut_duration <= 45:
-        base_prob += 20
-    if has_faces:
-        base_prob += 15
-    if has_movement:
-        base_prob += 15
-    return min(base_prob, 100)
+def _words_in_range_indexed(
+    all_words: list[dict],
+    starts: list[float],
+    start: float,
+    end: float,
+) -> list[dict]:
+    """Busca binária O(log n) para extrair palavras no intervalo."""
+    if not all_words:
+        return []
+    left = bisect.bisect_left(starts, start)
+    right = bisect.bisect_right(starts, end)
+    return all_words[left:right]
 
-def generate_clips(video_path, cuts, upload_folder):
-    clips = []
-    video = mp.VideoFileClip(video_path)
-    for i, (start, end) in enumerate(cuts):
-        clip = video.subclip(start, end)
-        clip_path = os.path.join(upload_folder, f'clip_{uuid.uuid4()}.mp4')
-        clip.write_videofile(clip_path, codec='libx264', audio_codec='aac', logger=None)
+
+def _get_optimal_workers() -> int:
+    """Determina número máximo de workers paralelos baseado no hardware."""
+    try:
+        import psutil
+        ram_gb = psutil.virtual_memory().available / (1024**3)
+    except ImportError:
+        ram_gb = 8.0
+
+    cpu = os.cpu_count() or 2
+    max_by_ram = max(1, int(ram_gb / 0.5))
+    return min(cpu, 2, max_by_ram)
+
+
+def _process_single_clip(args: tuple) -> dict | None:
+    """Processa um clip individual (chamado em worker separado)."""
+    (
+        video_path, start, end, output_path, ass_path, method,
+        out_w, out_h, x_offset, y_offset, zoom_factor,
+        score, breakdown, duration, segments,
+    ) = args
+
+    try:
+        export_clip(
+            video_path, start, end, output_path,
+            ass_path=ass_path, method=method,
+            out_w=out_w, out_h=out_h,
+            x_offset=x_offset, y_offset=y_offset,
+            zoom_factor=zoom_factor,
+        )
+
+        crop_label = _get_crop_label(x_offset)
+        zoom_label = f"{zoom_factor:.1f}x" if zoom_factor > 1.0 else None
+
+        return {
+            "path": output_path,
+            "prob": score,
+            "duration": round(duration, 1),
+            "breakdown": breakdown,
+            "crop": crop_label,
+            "zoom": zoom_label,
+            "segments": segments,
+        }
+    except Exception as e:
+        logger.error("Erro ao processar clip %.1f-%.1f: %s", start, end, e)
+        return None
+
+
+def _get_crop_label(x_offset: float | None) -> str:
+    """Converte x_offset em label legível."""
+    if x_offset is None or x_offset == 0.5:
+        return "Centro"
+    elif x_offset <= 0.1:
+        return "Esquerda"
+    elif x_offset >= 0.9:
+        return "Direita"
+    return "Centro"
+
+
+def generate_clips(
+    video_path,
+    segments,
+    upload_folder,
+    transcription=None,
+    subtitle_style="tiktok",
+    *,
+    method="crop",
+    out_w=1080,
+    out_h=1920,
+    x_offset=None,
+    y_offset=None,
+    zoom_factor=1.0,
+    auto_zoom=False,
+):
+    """
+    Gera clips usando pipeline FFmpeg unificado com processamento paralelo.
+
+    Offsets e zoom são resolvidos POR SEGMENTO: `seg["x_offset"]`,
+    `seg["y_offset"]` e `seg["zoom_factor"]` têm prioridade sobre os
+    parâmetros globais (é assim que o crop automático por face tracking
+    e o zoom automático chegam ao FFmpeg).
+
+    Cada clip retornado carrega `segments`: transcrição do próprio clip
+    com timestamps relativos (usada pelo export SRT/VTT).
+    """
+    all_words, starts = _build_word_index(transcription)
+
+    zoom_moments = []
+    if auto_zoom:
+        from core.auto_zoom import detect_zoom_moments, boost_zoom_for_range
+        zoom_moments = detect_zoom_moments(video_path)
+        logger.info("Zoom automático: %d momentos de alta energia", len(zoom_moments))
+
+    clip_args = []
+    for seg in segments:
+        start = seg["start"]
+        end = seg["end"]
         duration = end - start
-        has_faces = random.choice([True, False])  # Simulação
-        has_movement = random.choice([True, False])
-        prob = classify_viral_probability(duration, has_faces, has_movement)
-        clips.append({'path': clip_path, 'prob': prob, 'duration': duration})
-    video.close()
+
+        # Parâmetros por segmento (crop por face / zoom por energia)
+        seg_x = seg.get("x_offset", x_offset)
+        seg_y = seg.get("y_offset", y_offset)
+        seg_zoom = seg.get("zoom_factor", zoom_factor)
+        if auto_zoom and zoom_moments:
+            seg_zoom = boost_zoom_for_range(zoom_moments, start, end, seg_zoom)
+
+        ass_path = None
+        if all_words:
+            words = _words_in_range_indexed(all_words, starts, start, end)
+            if words:
+                shifted = [
+                    {"word": w["word"], "start": w["start"] - start, "end": w["end"] - start}
+                    for w in words
+                ]
+                ass_path = os.path.join(upload_folder, f"subs_{uuid.uuid4()}.ass")
+                generate_ass(shifted, ass_path, style=subtitle_style)
+
+        output_path = os.path.join(upload_folder, f"clip_{uuid.uuid4()}.mp4")
+
+        clip_segments = (
+            extract_clip_segments(transcription, start, end) if transcription else []
+        )
+
+        clip_args.append((
+            video_path, start, end, output_path, ass_path,
+            method, out_w, out_h, seg_x, seg_y, seg_zoom,
+            seg["score"], seg.get("breakdown", {}), duration, clip_segments,
+        ))
+
+    workers = _get_optimal_workers()
+    logger.info("Gerando %d clips com %d workers", len(clip_args), workers)
+
+    clips = []
+    if workers <= 1 or len(clip_args) == 1:
+        for args in clip_args:
+            result = _process_single_clip(args)
+            if result:
+                clips.append(result)
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_process_single_clip, args): i
+                for i, args in enumerate(clip_args)
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    clips.append(result)
+
+    for args in clip_args:
+        ass_path = args[4]
+        if ass_path and os.path.exists(ass_path):
+            os.remove(ass_path)
+
     return clips
 
+
 def add_captions_and_edit(clip_path, text="Texto viral!"):
-    clip = mp.VideoFileClip(clip_path)
-    txt_clip = mp.TextClip(text, fontsize=70, color='white').set_position('center').set_duration(clip.duration)
-    edited_clip = mp.CompositeVideoClip([clip, txt_clip]).fx(mp.vfx.blackwhite)
-    
-    # Create a new path for the edited clip
+    """
+    Edita um clip existente: caption estática sobreposta + efeito preto-e-branco.
+
+    Implementado com FFmpeg puro (sem MoviePy/ImageMagick): gera um ASS
+    estático e queima no vídeo junto com o filtro hue=s=0.
+    """
+    from core.ffprobe import probe_duration
+    from core.video_editor import probe_dimensions
+
+    duration = probe_duration(clip_path)
+    if duration <= 0:
+        raise RuntimeError(f"Não foi possível determinar a duração de {clip_path}")
+
+    width, height = probe_dimensions(clip_path)
+
     directory, filename = os.path.split(clip_path)
-    edited_filename = filename.replace('.mp4', '_edited.mp4')
+    edited_filename = filename.replace(".mp4", "_edited.mp4")
     edited_path = os.path.join(directory, edited_filename)
 
-    edited_clip.write_videofile(edited_path, codec='libx264', audio_codec='aac', logger=None)
-    
-    clip.close()
-    edited_clip.close()
-    
+    ass_path = os.path.join(directory, f"edit_{uuid.uuid4()}.ass")
+    generate_static_ass(text, duration, ass_path, width=width, height=height)
+
+    try:
+        ffmpeg = get_ffmpeg_path()
+        cmd = [
+            ffmpeg, "-i", clip_path,
+            "-vf", f"hue=s=0,ass={ass_path}",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-c:a", "copy",
+            "-y", edited_path,
+        ]
+        subprocess.run(cmd, check=True, capture_output=True)
+        logger.info("Clip editado: %s", edited_path)
+    finally:
+        if os.path.exists(ass_path):
+            os.remove(ass_path)
+
     return edited_path

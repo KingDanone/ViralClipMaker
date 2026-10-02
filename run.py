@@ -2,15 +2,16 @@
 run.py — Ponto de entrada único do ViralClipMaker.
 
 Uso:
-    python run.py          # Modo web (abre o browser automaticamente)
-    python run.py --no-browser  # Modo web sem abrir o browser
+    python run.py                  # Modo web (abre o browser automaticamente)
+    python run.py --no-browser     # Modo web sem abrir o browser
 
 O que este script faz, em ordem:
-    1. Verifica a versão do Python (>= 3.10)
-    2. Verifica se todas as dependências do requirements.txt estão instaladas
-    3. Baixa o modelo Whisper 'tiny' se ainda não existir em models/
-    4. Garante que as pastas uploads/ e outputs/ existem
-    5. Inicia o servidor Flask e abre http://localhost:5000 no browser padrão
+    1. Reexecuta dentro da venv do projeto, se necessário (venv/, .venv/, Windows)
+    2. Verifica a versão do Python (>= 3.10)
+    3. Verifica se as dependências do requirements.txt estão instaladas
+    4. Baixa o modelo Whisper 'tiny' se ainda não existir em models/
+    5. Garante que as pastas uploads/ e outputs/ existem
+    6. Inicia o servidor (FastAPI + uvicorn) e abre http://localhost:5000
 """
 
 import sys
@@ -19,25 +20,38 @@ import subprocess
 import importlib.util
 import argparse
 
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 # ---------------------------------------------------------------------------
-# Auto-venv (executa tudo dentro da venv do projeto)
+# Auto-venv (reexecuta dentro da venv do projeto)
 # ---------------------------------------------------------------------------
 
+def _venv_python_candidates() -> list[str]:
+    """Caminhos possíveis do python da venv: venv/, .venv/, Linux-mac/Windows."""
+    candidates = []
+    for venv_dir in ("venv", ".venv"):
+        candidates.append(os.path.join(_ROOT, venv_dir, "bin", "python"))
+        candidates.append(os.path.join(_ROOT, venv_dir, "Scripts", "python.exe"))
+    return candidates
+
+
 def _ensure_venv() -> None:
-    """Se não estiver dentro da venv do projeto, reexecuta com venv/bin/python."""
+    """Se não estiver dentro da venv do projeto, reexecuta com o python dela."""
     if sys.prefix != sys.base_prefix:
-        return  # já estamos na venv
-    venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "python")
-    if os.path.isfile(venv_python):
-        _print("Fora da venv detectado — reexecutando com venv/bin/python ...", "warn")
-        sys.stdout.flush()
-        os.execv(venv_python, [venv_python] + sys.argv)
-    _print(
-        "Execute o projeto dentro da venv:\n"
-        "    source venv/bin/activate\n"
-        "    pip install -r requirements.txt\n"
-        "    python run.py",
-        "err",
+        return  # já estamos numa venv
+
+    for python_path in _venv_python_candidates():
+        if os.path.isfile(python_path):
+            print(f"  ▶ Fora da venv — reexecutando com {python_path} ...")
+            sys.stdout.flush()
+            os.execv(python_path, [python_path] + sys.argv)
+
+    print(
+        "  ❌ Venv não encontrada. Crie e instale as dependências:\n"
+        "       python -m venv .venv\n"
+        "       source .venv/bin/activate        # Windows: .venv\\Scripts\\activate\n"
+        "       pip install -r requirements.txt\n"
+        "       python run.py"
     )
     sys.exit(1)
 
@@ -62,32 +76,27 @@ def check_dependencies() -> None:
     """Verifica se os pacotes críticos estão instalados; instala se necessário."""
     _print("Verificando dependências...")
 
-    req_path = os.path.join(os.path.dirname(__file__), "requirements.txt")
+    req_path = os.path.join(_ROOT, "requirements.txt")
     if not os.path.exists(req_path):
         _print("requirements.txt não encontrado — pulando verificação de deps.", "warn")
         return
 
-    # Pacotes que não têm um módulo importável com o mesmo nome
+    # Pacotes cujo módulo importável tem nome diferente do pacote
     NAME_MAP = {
-        "opencv-python": "cv2",
         "imageio-ffmpeg": "imageio_ffmpeg",
         "nodejs-bin": "nodejs",
         "yt-dlp": "yt_dlp",
-        "yt-dlp-ejs": None,          # helper interno do yt-dlp, não importável diretamente
+        "yt-dlp-ejs": None,            # helper interno do yt-dlp, não importável diretamente
         "faster-whisper": "faster_whisper",
-        "Pillow": "PIL",
-        "pillow": "PIL",
-        "SpeechRecognition": "speech_recognition",
+        "python-multipart": "python_multipart",
     }
 
     missing = []
     with open(req_path) as f:
         for raw in f:
             raw = raw.strip()
-            # Ignorar linhas vazias e comentários
             if not raw or raw.startswith("#"):
                 continue
-            # Remover versão pinada, e.g. "Flask==3.1.2" → "Flask"
             pkg_name = raw.split("==")[0].split(">=")[0].split("<=")[0].strip()
             import_name = NAME_MAP.get(pkg_name, pkg_name.replace("-", "_").lower())
             if import_name is None:
@@ -108,15 +117,14 @@ def check_dependencies() -> None:
 def ensure_dirs() -> None:
     """Cria as pastas essenciais se não existirem."""
     for d in ("uploads", "outputs", "models"):
-        os.makedirs(d, exist_ok=True)
+        os.makedirs(os.path.join(_ROOT, d), exist_ok=True)
     _print("Pastas uploads/, outputs/, models/ prontas", "ok")
 
 
 def download_whisper_model(model_size: str = "tiny") -> None:
     """Baixa o modelo Whisper se ainda não estiver em models/."""
-    model_dir = os.path.join(os.path.dirname(__file__), "models")
-    # faster-whisper armazena modelos em subpastas como "models/models--Systran--faster-whisper-tiny"
-    # Verificamos se alguma subpasta do modelo já existe antes de baixar.
+    model_dir = os.path.join(_ROOT, "models")
+    # faster-whisper armazena modelos em subpastas como "models--Systran--faster-whisper-tiny"
     already_present = any(
         model_size in entry for entry in os.listdir(model_dir)
     ) if os.path.exists(model_dir) else False
@@ -133,7 +141,6 @@ def download_whisper_model(model_size: str = "tiny") -> None:
             "Isso pode levar alguns minutos na primeira execução...",
             "warn",
         )
-        # Instanciar o modelo dispara o download automaticamente.
         WhisperModel(model_size, device="cpu", download_root=model_dir)
         _print(f"Modelo Whisper '{model_size}' baixado com sucesso", "ok")
     except ImportError:
@@ -144,7 +151,7 @@ def download_whisper_model(model_size: str = "tiny") -> None:
 
 
 def start_server(open_browser: bool = True, port: int = 5000) -> None:
-    """Inicia o Flask e, opcionalmente, abre o browser."""
+    """Inicia o servidor FastAPI (uvicorn) e opcionalmente abre o browser."""
     import threading
     import webbrowser
     import time
@@ -153,18 +160,19 @@ def start_server(open_browser: bool = True, port: int = 5000) -> None:
 
     if open_browser:
         def _open():
-            time.sleep(1.5)  # Dá tempo para o Flask subir
+            time.sleep(1.5)
             webbrowser.open(url)
-
         threading.Thread(target=_open, daemon=True).start()
 
     _print(f"Iniciando servidor em {url}  (Ctrl+C para encerrar)", "info")
 
-    # Importar e rodar a aplicação Flask
-    # Mantemos compatibilidade com o app.py na raiz por enquanto.
-    from app import app as flask_app
+    try:
+        import uvicorn
+    except ImportError:
+        _print("uvicorn não instalado. Rode: pip install -r requirements.txt", "err")
+        sys.exit(1)
 
-    flask_app.run(host="0.0.0.0", port=port, debug=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, log_level="info")
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +180,8 @@ def start_server(open_browser: bool = True, port: int = 5000) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    os.chdir(_ROOT)
+
     parser = argparse.ArgumentParser(
         description="ViralClipMaker — launcher único"
     )
