@@ -1,10 +1,11 @@
 import os
+import shutil
 import uuid
 import logging
 
 import yt_dlp
 
-from core.runtime import get_ffmpeg_path
+from core.runtime import get_ffmpeg_path, patch_env_path
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,9 @@ def download_video(url: str, output_dir: str) -> str:
     filename_template = os.path.join(output_dir, f"{uuid.uuid4()}.mp4")
 
     ffmpeg_path = get_ffmpeg_path()
+    # Garante que ffmpeg/node ficam visíveis no PATH para o yt-dlp
+    # (necessário para o runtime JS do yt-dlp-ejs e para o merge de streams).
+    patch_env_path()
 
     ydl_opts = {
         "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best",
@@ -42,3 +46,22 @@ def download_video(url: str, output_dir: str) -> str:
 
     logger.info("Vídeo baixado: %s", filename_template)
     return filename_template
+
+
+def resolve_video_source(source: str, input_type: str, output_dir: str) -> str:
+    """
+    Resolve uma origem de vídeo (URL ou path local) para um arquivo
+    dentro de `output_dir`. URLs são baixadas; arquivos locais são copiados.
+    """
+    if input_type == "url":
+        return download_video(source, output_dir)
+
+    if input_type == "file":
+        if not os.path.exists(source):
+            raise FileNotFoundError(f"Arquivo não encontrado: {source}")
+        filename = f"{uuid.uuid4()}.mp4"
+        path = os.path.join(output_dir, filename)
+        shutil.copy2(source, path)
+        return path
+
+    raise ValueError(f"Tipo de entrada inválido: {input_type}")

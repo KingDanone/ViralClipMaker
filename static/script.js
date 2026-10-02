@@ -16,6 +16,7 @@ function app() {
         clipDuration: 30,
         cropPosition: 'center',
         zoomFactor: 1.0,
+        autoZoom: false,
         subtitleStyle: 'tiktok',
         outW: 1080,
         outH: 1920,
@@ -106,6 +107,9 @@ function app() {
             this.error = '';
         },
 
+        // Mapa dos passos do backend para o índice do checklist da UI
+        sseSteps: { download: 0, transcribe: 2, analyze: 3, generate: 4, done: 5 },
+
         async processVideo() {
             if (!this.url && !this.file) {
                 this.error = 'Por favor, selecione um vídeo ou cole uma URL.';
@@ -118,52 +122,42 @@ function app() {
             this.currentStep = 0;
             this.progress = 0;
 
-            // Simulate step progress while waiting
-            const stepInterval = setInterval(() => {
-                if (this.currentStep < this.steps.length - 1) {
-                    this.currentStep++;
-                    this.progress = Math.min(90, this.currentStep * 20);
-                }
-            }, 3000);
-
             try {
                 const formData = new FormData();
                 formData.append('whisper_model', this.whisperModel);
                 formData.append('clip_duration', this.clipDuration);
                 formData.append('crop_position', this.cropPosition);
                 formData.append('zoom_factor', this.zoomFactor);
+                formData.append('auto_zoom', this.autoZoom);
                 formData.append('subtitle_style', this.subtitleStyle);
+                formData.append('output_width', this.outW);
+                formData.append('output_height', this.outH);
 
                 if (this.url) {
                     formData.append('input_type', 'url');
                     formData.append('url', this.url);
-                    this.progressText = 'Baixando vídeo do YouTube...';
                 } else {
                     formData.append('input_type', 'file');
                     formData.append('file', this.file);
-                    this.progressText = 'Enviando arquivo...';
                 }
 
-                const response = await fetch('/process', {
+                const response = await fetch('/process-stream', {
                     method: 'POST',
                     body: formData,
                 });
 
-                const data = await response.json();
-
-                if (data.error) {
-                    throw new Error(data.error);
+                // Erros "de infra" chegam como JSON; progresso chega como SSE
+                if (!response.ok || !(response.headers.get('content-type') || '').includes('event-stream')) {
+                    const data = await response.json().catch(() => ({}));
+                    throw new Error(data.error || `Erro no servidor (${response.status})`);
                 }
 
-                // Complete progress
-                this.currentStep = this.steps.length;
-                this.progress = 100;
-                this.progressText = 'Concluído!';
+                const result = await this._readSSE(response);
 
                 // Small delay then show results
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 400));
 
-                this.clips = (data.clips || []).map(c => ({ ...c, expanded: false }));
+                this.clips = (result.clips || []).map(c => ({ ...c, expanded: false }));
                 this.state = 'results';
                 this.saveToHistory();
 
@@ -171,9 +165,51 @@ function app() {
                 this.error = err.message || 'Ocorreu um erro ao processar o vídeo.';
                 this.state = 'upload';
             } finally {
-                clearInterval(stepInterval);
                 this.processing = false;
             }
+        },
+
+        async _readSSE(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalEvent = null;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                let idx;
+                while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                    const rawEvent = buffer.slice(0, idx);
+                    buffer = buffer.slice(idx + 2);
+
+                    const dataLine = rawEvent
+                        .split('\n')
+                        .find(l => l.startsWith('data: '));
+                    if (!dataLine) continue;
+
+                    let evt;
+                    try {
+                        evt = JSON.parse(dataLine.slice(6));
+                    } catch { continue; }
+
+                    if (evt.error) throw new Error(evt.error);
+
+                    if (evt.progress !== undefined) this.progress = evt.progress;
+                    if (evt.message) this.progressText = evt.message;
+                    if (evt.step && evt.step in this.sseSteps) {
+                        this.currentStep = this.sseSteps[evt.step];
+                    }
+                    if (evt.step === 'done') finalEvent = evt;
+                }
+            }
+
+            if (!finalEvent) {
+                throw new Error('O servidor encerrou sem concluir o processamento.');
+            }
+            return finalEvent;
         },
 
         downloadClip(clip) {

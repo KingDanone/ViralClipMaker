@@ -177,6 +177,18 @@
                     </div>
                 </div>
 
+                <!-- Auto Zoom -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="text-sm font-medium">Zoom automático</label>
+                        <p class="text-xs text-gray-400 mt-0.5">Aplica zoom extra nos picos de energia</p>
+                    </div>
+                    <button @click="autoZoom = !autoZoom" type="button"
+                            :class="autoZoom ? 'bg-violet-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                            class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                            x-text="autoZoom ? 'Ativado' : 'Desativado'"></button>
+                </div>
+
                 <!-- Subtitle Style -->
                 <div>
                     <label class="block text-sm font-medium mb-2">Estilo da Legenda</label>
@@ -218,16 +230,6 @@
                     </span>
                 </template>
             </button>
-
-            <!-- Hidden inputs for form -->
-            <input type="hidden" name="input_type" :value="url ? 'url' : 'file'">
-            <input type="hidden" name="whisper_model" :value="whisperModel">
-            <input type="hidden" name="clip_duration" :value="clipDuration">
-            <input type="hidden" name="crop_position" :value="cropPosition">
-            <input type="hidden" name="zoom_factor" :value="zoomFactor">
-            <input type="hidden" name="subtitle_style" :value="subtitleStyle">
-            <input type="hidden" name="output_width" :value="outW">
-            <input type="hidden" name="output_height" :value="outH">
 
         </div>
 
@@ -281,7 +283,7 @@
                 <h2 class="text-2xl font-bold">
                     Seus cortes estão prontos! <span class="text-2xl">🎉</span>
                 </h2>
-                <p class="text-gray-500 dark:text-gray-400 mt-1" x-text="clips.length + ' clipes gerados'"></p>
+                <p class="text-gray-500 dark:text-gray-400 mt-1" x-text="clips.length === 1 ? '1 clipe gerado' : clips.length + ' clipes gerados'"></p>
             </div>
 
             <!-- Clips Grid -->

@@ -68,6 +68,11 @@ def main():
         help="Resolução de saída WxH (padrão: 1080x1920)",
     )
     parser.add_argument(
+        "--auto-zoom",
+        action="store_true",
+        help="Zoom automático em momentos de alta energia",
+    )
+    parser.add_argument(
         "--output", "-o",
         default="output",
         help="Diretório de saída (padrão: output/)",
@@ -90,8 +95,8 @@ def main():
 
     from core.transcriber import transcribe
     from core.clip_detector import detect_clips
+    from core.pipeline import parse_crop_position
     from video_processing import generate_clips
-    from app import _parse_crop_position
 
     logger.info("Transcrevendo...")
     transcription = transcribe(video_path, model_size=args.model)
@@ -103,8 +108,19 @@ def main():
         clip_duration=args.duration,
     )
 
-    crop_params = _parse_crop_position(args.crop, args.zoom)
-    crop_params.pop("auto_crop", None)
+    crop_params = parse_crop_position(args.crop, args.zoom)
+
+    if crop_params.pop("auto_crop", False):
+        logger.info("Detectando faces para crop automático...")
+        from core.face_tracker import (
+            detect_faces_in_clip,
+            face_to_crop_params,
+            apply_auto_crop,
+        )
+        for seg in segments:
+            face_info = detect_faces_in_clip(video_path, seg["start"], seg["end"])
+            seg["_crop_params"] = face_to_crop_params(face_info)
+        segments = apply_auto_crop(segments, crop_params)
 
     logger.info("Gerando %d clips...", len(segments))
     clips = generate_clips(
@@ -112,6 +128,7 @@ def main():
         transcription=transcription,
         subtitle_style=args.style,
         out_w=w, out_h=h,
+        auto_zoom=args.auto_zoom,
         **crop_params,
     )
 

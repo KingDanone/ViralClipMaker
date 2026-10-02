@@ -116,6 +116,20 @@ def face_to_crop_params(face_info: dict) -> dict:
     }
 
 
+def apply_auto_crop(segments: list, base_params: dict) -> list:
+    """
+    Converte `_crop_params` (preenchido por `face_to_crop_params`) em
+    `x_offset`/`y_offset` por segmento, com fallback aos params globais.
+
+    `generate_clips` lê esses offsets por segmento.
+    """
+    for seg in segments:
+        crop = seg.pop("_crop_params", {})
+        seg["x_offset"] = crop.get("x_offset", base_params.get("x_offset", 0.5))
+        seg["y_offset"] = crop.get("y_offset", base_params.get("y_offset", 0.5))
+    return segments
+
+
 def _extract_frames(
     video_path: str,
     start: float,

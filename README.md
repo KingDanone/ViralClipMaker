@@ -6,25 +6,24 @@ Transforms long videos into short viral clips (TikTok, Reels, Shorts) with capti
 ## Features
 
 - **Input**: YouTube URL or local video file upload
-- **AI Transcription**: faster-whisper with word-level timestamps
-- **Virality Score**: Multi-factor analysis (sentiment, audio energy, viral hooks, speech density)
-- **Smart Clipping**: Sliding window detection, top N segments by score
+- **AI Transcription**: faster-whisper with word-level timestamps (adaptive for >30min videos)
+- **Virality Score**: Multi-factor analysis (sentiment PT-BR/EN, audio energy, viral hooks, speech density) with overlap suppression — every clip is a distinct moment
 - **9:16 Reframe**: Crop, letterbox, or blur padding for TikTok/Reels format
 - **Animated Captions**: Word-by-word karaoke subtitles (4 styles: TikTok, Bold, Neon, Minimal)
 - **Camera Tracking**: Auto-detect faces and follow them (MediaPipe)
-- **Crop Control**: Choose position (left/center/right/auto) and zoom (1.0x-2.0x)
-- **Resolution Presets**: TikTok 1080×1920, Reels 1080×1920, 720×1280
-- **Duration Presets**: 15s, 30s, 60s, 90s clips
-- **Export Subtitles**: Download .srt or .vtt files
+- **Crop Control**: Position (left/center/right/auto) and zoom (1.0x–2.0x)
+- **Auto Zoom**: Automatic zoom boost on high-energy moments (optional)
+- **Real-time Progress**: Server-Sent Events — no fake progress bars
+- **Export Subtitles**: Download .srt or .vtt per clip (relative timestamps)
 - **Batch Download**: Download all clips as .zip
 - **CLI**: Command-line interface for automation
 - **Dark/Light Mode**: Automatic based on system preference
-- **Project History**: Saves last 50 projects locally
+- **Project History**: Last 50 projects saved locally
 
 ## Requirements
 
 - Python **3.10+**
-- ~75 MB free disk for Whisper model (auto-downloaded on first run)
+- ~75 MB free disk for the Whisper model (auto-downloaded on first run)
 - 8GB RAM recommended
 
 No system-wide FFmpeg or Node.js installation required.
@@ -34,10 +33,13 @@ No system-wide FFmpeg or Node.js installation required.
 ```bash
 git clone https://github.com/your-username/ViralClipMaker.git
 cd ViralClipMaker
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 python run.py
 ```
 
 The browser will open at `http://localhost:5000` automatically.
+If a `venv/` or `.venv/` exists in the project, `run.py` re-executes inside it automatically.
 
 ### `run.py` options
 
@@ -45,7 +47,7 @@ The browser will open at `http://localhost:5000` automatically.
 |---|---|
 | `--no-browser` | Don't open the browser automatically |
 | `--port PORT` | Server port (default: 5000) |
-| `--whisper-model {tiny,base,small}` | Whisper model size (default: tiny) |
+| `--whisper-model {tiny,base,small,...}` | Whisper model size (default: tiny) |
 
 ## CLI Usage
 
@@ -59,8 +61,8 @@ python -m viralclip video.mp4 --clips 5 --duration 30 --model small
 # From YouTube
 python -m viralclip https://youtube.com/watch?v=... --output ./clips/
 
-# Custom resolution
-python -m viralclip video.mp4 --resolution 720x1280 --crop left --zoom 1.5
+# Custom resolution, crop, auto zoom
+python -m viralclip video.mp4 --resolution 720x1280 --crop left --auto-zoom
 ```
 
 ### CLI Options
@@ -73,6 +75,7 @@ python -m viralclip video.mp4 --resolution 720x1280 --crop left --zoom 1.5
 | `--style, -s` | Subtitle style | tiktok |
 | `--crop` | Crop position (left, center, right, auto) | center |
 | `--zoom` | Zoom factor (1.0-2.0) | 1.0 |
+| `--auto-zoom` | Zoom boost on high-energy moments | off |
 | `--resolution` | Output resolution WxH | 1080x1920 |
 | `--output, -o` | Output directory | output/ |
 
@@ -80,63 +83,61 @@ python -m viralclip video.mp4 --resolution 720x1280 --crop left --zoom 1.5
 
 ```
 [Input: YouTube URL or local file]
-    → 1. DOWNLOAD       (yt-dlp / upload)
+    → 1. DOWNLOAD       (yt-dlp / streaming upload)
     → 2. TRANSCRIBE     (faster-whisper, word timestamps)
     → 3. SCORE          (sentiment + energy + hooks + density)
-    → 4. SELECT         (top N segments by score)
-    → 5. REFRAME        (9:16 crop/scale)
+    → 4. SELECT         (top N segments, temporal NMS — no duplicates)
+    → 5. REFRAME        (9:16 crop, face tracking optional)
     → 6. CAPTIONS       (word-by-word ASS overlay)
-    → 7. EXPORT         (H.264, configurable resolution)
+    → 7. EXPORT         (H.264, 1 FFmpeg encode per clip)
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | Flask (Python) |
+| Backend | FastAPI + uvicorn (SSE for real-time progress) |
 | Transcription | faster-whisper |
 | Audio Analysis | librosa + FFmpeg |
-| NLP Scoring | TextBlob |
+| Sentiment | TextBlob (EN) + built-in PT-BR lexicon |
 | Face Detection | MediaPipe |
-| Video Processing | FFmpeg |
+| Video Processing | FFmpeg (single encode per clip) |
 | Frontend | Alpine.js + Tailwind CSS |
 
 ## Project Structure
 
 ```
 ViralClipMaker/
-├── app.py                  # Flask server, routes
-├── video_processing.py     # Pipeline orchestration
+├── app.py                  # FastAPI backend (single server, SSE)
+├── video_processing.py     # Clip orchestration (parallel FFmpeg)
 ├── run.py                  # Single entry point
 ├── requirements.txt
 ├── musicas_virais.json     # Music track list
+├── viralclip.spec          # PyInstaller build spec
 │
 ├── core/
 │   ├── runtime.py          # Platform detection, binary paths
+│   ├── ffprobe.py          # Fast header-only video metadata
+│   ├── downloader.py       # yt-dlp wrapper
 │   ├── transcriber.py      # faster-whisper + adaptive transcription
-│   ├── clip_detector.py    # Multi-factor virality scoring
+│   ├── clip_detector.py    # Multi-factor scoring + NMS dedup
+│   ├── pipeline.py         # Unified FFmpeg pipeline (1 encode/clip)
 │   ├── video_editor.py     # 9:16 reframe (crop/letterbox/blur)
-│   ├── subtitle_renderer.py # Word-by-word ASS subtitles
-│   ├── subtitle_export.py  # SRT/VTT export
-│   ├── pipeline.py         # Unified FFmpeg pipeline
-│   ├── face_tracker.py     # MediaPipe face detection
-│   ├── auto_zoom.py        # Audio energy-based zoom
-│   └── downloader.py       # yt-dlp wrapper
+│   ├── subtitle_renderer.py# Word-by-word ASS subtitles
+│   ├── subtitle_export.py  # SRT/VTT export (clip-relative timestamps)
+│   ├── face_tracker.py     # MediaPipe face → auto crop
+│   ├── auto_zoom.py        # Audio energy-based zoom boost
+│   └── history.py          # Local project history
 │
 ├── viralclip/
 │   └── __main__.py         # CLI entry point
 │
-├── static/                 # Frontend assets
+├── static/                 # Frontend assets (Alpine.js)
 ├── templates/              # HTML templates
 ├── models/                 # Whisper models (auto-downloaded)
 ├── uploads/                # Temp uploads and clips
 └── outputs/                # Transcription cache
 ```
-
-## UI Modes
-
-- **Simple Mode**: Just upload + generate button
-- **Advanced Mode**: Access to all settings (model, duration, crop, zoom, style, resolution)
 
 ## Troubleshooting
 

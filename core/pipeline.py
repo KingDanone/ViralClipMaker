@@ -16,6 +16,33 @@ from core.video_editor import probe_dimensions, _METHODS
 logger = logging.getLogger(__name__)
 
 
+def parse_crop_position(position: str, zoom: float) -> dict:
+    """
+    Converte preset de posição ("left"/"center"/"right"/"auto") em
+    parâmetros de crop para `export_clip`/`generate_clips`.
+
+    "auto" retorna auto_crop=True e offsets None — o chamador deve
+    preencher os offsets por segmento via core.face_tracker.
+    """
+    zoom = max(1.0, min(2.0, float(zoom or 1.0)))
+
+    if position == "auto":
+        return {"x_offset": None, "y_offset": None, "zoom_factor": zoom, "auto_crop": True}
+
+    positions = {
+        "left": (0.0, 0.5),
+        "center": (0.5, 0.5),
+        "right": (1.0, 0.5),
+    }
+    x_offset, y_offset = positions.get(position, positions["center"])
+    return {
+        "x_offset": x_offset,
+        "y_offset": y_offset,
+        "zoom_factor": zoom,
+        "auto_crop": False,
+    }
+
+
 def export_clip(
     video_path: str,
     start: float,

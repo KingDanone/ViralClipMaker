@@ -1,4 +1,3 @@
-import re
 import subprocess
 import logging
 
@@ -10,35 +9,15 @@ _dim_cache: dict[str, tuple[int, int]] = {}
 
 
 def probe_dimensions(video_path: str) -> tuple[int, int]:
-    """Retorna (largura, altura) do vídeo. Cacheia resultado para evitar probes repetidos."""
+    """Retorna (largura, altura) do vídeo lendo apenas o header. Com cache."""
     if video_path in _dim_cache:
         return _dim_cache[video_path]
 
-    ffmpeg = get_ffmpeg_path()
-    cmd = [
-        ffmpeg, "-i", video_path,
-        "-f", "null", "-",
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    stderr = result.stderr
-    for line in stderr.splitlines():
-        if "Stream #0:0" in line and "Video:" in line:
-            parts = line.split(",")
-            for p in parts:
-                p = p.strip()
-                if "x" in p and any(c.isdigit() for c in p):
-                    try:
-                        match = re.search(r'(\d{2,})x(\d{2,})', p)
-                        if match:
-                            w_num = int(match.group(1))
-                            h_num = int(match.group(2))
-                            _dim_cache[video_path] = (w_num, h_num)
-                            return w_num, h_num
-                    except (ValueError, AttributeError):
-                        pass
+    from core.ffprobe import probe_video_dimensions
 
-    _dim_cache[video_path] = (1080, 1920)
-    return 1080, 1920
+    dims = probe_video_dimensions(video_path) or (1080, 1920)
+    _dim_cache[video_path] = dims
+    return dims
 
 
 _probe_aspect = probe_dimensions

@@ -1,4 +1,5 @@
 import re
+import subprocess
 import logging
 
 import numpy as np
@@ -11,23 +12,48 @@ logger = logging.getLogger(__name__)
 _HOOK_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"você (sabia|viu|conhece|ja ouviu)",
-        r"(what|why|how|did you|have you|do you|are you)",
         r"você (sabia|viu|conhece|já ouviu)",
-        r"(never|always|everyone|nobody|impossible|in[cC]r[ií]vel|amei|odeio|perfeito)",
+        r"(what|why|how|did you|have you|do you|are you)",
+        r"(never|always|everyone|nobody|impossible|incrível|amei|odeio|perfeito)",
         r"(you won't believe|you need to see|wait till|watch this)",
         r"(você não vai acreditar|você precisa ver|olha isso|espera até)",
         r"(the (best|worst|biggest|most|only))",
         r"(o (melhor|pior|maior|único))",
         r"(this is (crazy|insane|amazing|unreal|wild))",
-        r"(isso é (loco|insano|incrível|surreal|selvagem))",
+        r"(isso é (louco|insano|incrível|surreal|absurdo))",
     ]
 ]
+
+# Léxico PT-BR para sentimento — TextBlob só funciona bem em inglês.
+_PT_POSITIVE = {
+    "incrível", "incrivel", "amazing", "melhor", "melhores", "top", "amei",
+    "amo", "adoro", "perfeito", "perfeita", "genial", "fantástico",
+    "fantastico", "maravilhoso", "maravilhosa", "excelente", "sensacional",
+    "épico", "epico", "brabo", "braba", "lendário", "lendario", "demais",
+    "show", "parabéns", "parabens", "sucesso", "viral", "imperdível",
+    "imperdivel", "ótimo", "otimo", "bom", "boa", "legal", "maneiro",
+    "massa", "dahora", "curti", "gostei", "feliz", "engraçado", "hilário",
+    "hilario", "insano", "insana", "surpreendente", "forte", "poderoso",
+    "eficiente", "funciona", "grátis", "gratis", "fácil", "facil",
+    "rápido", "rapido", "ganhar", "ganhe", "lucro", "vencer", "conquistar",
+}
+_PT_NEGATIVE = {
+    "pior", "piores", "horrível", "horrivel", "odeio", "detesto",
+    "terrível", "terrivel", "chato", "chata", "ruim", "fraco", "fraca",
+    "lento", "demorado", "difícil", "dificil", "impossível", "impossivel",
+    "fracasso", "erro", "falha", "falhou", "mentira", "fake", "golpe",
+    "perda", "perder", "prejuízo", "prejuizo", "caro", "cansativo",
+    "tedioso", "problema", "nunca", "jamais", "ninguém", "triste",
+}
+
+_TOKEN_RE = re.compile(r"[\wáàâãéèêíïóôõúûüç]+", re.UNICODE)
+
+# Razão máxima de sobreposição entre clips selecionados (NMS temporal).
+_MAX_OVERLAP = 0.5
 
 
 def _audio_to_numpy(video_path: str, sr: int = 22050) -> np.ndarray:
     """Extrai áudio via FFmpeg pipe para numpy array (sem arquivo temporário)."""
-    import subprocess
     from core.runtime import get_ffmpeg_path
 
     ffmpeg = get_ffmpeg_path()
@@ -74,12 +100,30 @@ def _segment_energy(
     return float(np.mean(segment))
 
 
-def _sentiment_score(text: str) -> float:
-    """Polaridade do texto via TextBlob, normalizada para 0-1."""
+def _lexicon_sentiment(text: str) -> float:
+    """Sentimento 0-1 via léxico PT-BR (TextBlob não funciona em português)."""
+    tokens = set(_TOKEN_RE.findall(text.lower()))
+    pos = len(tokens & _PT_POSITIVE)
+    neg = len(tokens & _PT_NEGATIVE)
+    hits = pos + neg
+    if hits == 0:
+        return 0.5
+    return 0.5 + 0.5 * (pos - neg) / hits
+
+
+def _sentiment_score(text: str, language: str = "auto") -> float:
+    """
+    Sentimento 0-1 do texto.
+
+    Usa TextBlob para inglês e léxico PT-BR para os demais idiomas
+    (TextBlob sempre retorna polaridade 0 para português).
+    """
     if not text or not text.strip():
         return 0.5
-    blob = TextBlob(text)
-    return (blob.sentiment.polarity + 1) / 2
+    if (language or "auto").lower().startswith("en"):
+        blob = TextBlob(text)
+        return (blob.sentiment.polarity + 1) / 2
+    return _lexicon_sentiment(text)
 
 
 def _hook_score(text: str) -> float:
@@ -145,6 +189,26 @@ def _extract_segment_words(transcription: dict, start: float, end: float) -> lis
     return words
 
 
+def _overlap_ratio(a: dict, b: dict) -> float:
+    """Fração do clip mais curto coberta pelo outro (0.0 a 1.0)."""
+    inter = min(a["end"], b["end"]) - max(a["start"], b["start"])
+    if inter <= 0:
+        return 0.0
+    shorter = min(a["end"] - a["start"], b["end"] - b["start"])
+    return inter / shorter if shorter > 0 else 0.0
+
+
+def _select_top_n(candidates: list[dict], num_clips: int) -> list[dict]:
+    """Seleciona os N melhores candidatos suprimindo sobreposição (NMS temporal)."""
+    selected = []
+    for cand in sorted(candidates, key=lambda c: c["score"], reverse=True):
+        if all(_overlap_ratio(cand, s) < _MAX_OVERLAP for s in selected):
+            selected.append(cand)
+        if len(selected) >= num_clips:
+            break
+    return selected
+
+
 def detect_clips(
     transcription: dict,
     video_path: str,
@@ -173,26 +237,27 @@ def detect_clips(
         logger.warning("Duração do vídeo inválida: %s", duration)
         return []
 
+    language = transcription.get("language", "auto")
+
+    # Fallback: vídeo mais curto que a duração pedida vira um único clip.
+    clip_duration = float(clip_duration) if clip_duration else 30.0
+    if clip_duration <= 0:
+        clip_duration = 30.0
+    clip_duration = min(clip_duration, duration)
+
     rms, sr, hop_length = _calc_audio_energy(video_path)
 
-    candidates = []
-    step = clip_duration / 2
-    t = 0.0
-    while t + clip_duration <= duration:
-        start = t
-        end = t + clip_duration
-
+    def _score_window(start: float, end: float) -> dict:
         text = _extract_segment_text(transcription, start, end)
         words = _extract_segment_words(transcription, start, end)
 
-        sentiment = _sentiment_score(text)
+        sentiment = _sentiment_score(text, language)
         energy = _segment_energy(rms, sr, hop_length, start, end) if rms is not None else 0.5
         hook = _hook_score(text)
         density = _density_score(words)
-
         score = _combine_score(sentiment, energy, hook, density)
 
-        candidates.append({
+        return {
             "start": round(start, 1),
             "end": round(end, 1),
             "score": score,
@@ -202,16 +267,24 @@ def detect_clips(
                 "hook": bool(hook),
                 "density": round(density, 3),
             },
-        })
+        }
+
+    candidates = []
+    step = max(clip_duration / 2, 1.0)
+    t = 0.0
+    while t + clip_duration <= duration + 1e-6:
+        candidates.append(_score_window(t, t + clip_duration))
         t += step
 
-    candidates.sort(key=lambda c: c["score"], reverse=True)
-    top = candidates[:num_clips]
+    if not candidates and duration >= min_segment_duration:
+        candidates.append(_score_window(0.0, duration))
+
+    top = _select_top_n(candidates, num_clips)
 
     logger.info(
-        "detect_clips: %d candidatos analisados, top %d selecionados (score máximo: %d)",
+        "detect_clips: %d candidatos analisados, %d selecionados (score máximo: %d)",
         len(candidates),
-        num_clips,
+        len(top),
         top[0]["score"] if top else 0,
     )
 

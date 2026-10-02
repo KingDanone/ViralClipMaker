@@ -67,6 +67,24 @@ def detect_zoom_moments(
     return moments
 
 
+def boost_zoom_for_range(
+    moments: list[dict],
+    start: float,
+    end: float,
+    base_zoom: float = 1.0,
+    boost: float = 1.3,
+) -> float:
+    """
+    Retorna o zoom a aplicar em [start, end]: se algum momento de alta
+    energia se sobrepõe ao intervalo, eleva o zoom para pelo menos `boost`.
+    """
+    zoom = base_zoom
+    for m in moments:
+        if m["start"] < end and m["end"] > start:
+            zoom = max(zoom, boost)
+    return zoom
+
+
 def _merge_close_moments(
     moments: list[dict],
     min_duration: float,

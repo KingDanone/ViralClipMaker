@@ -61,11 +61,12 @@ def _ass_escape(text: str) -> str:
 
 
 def _secs_to_ass(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = seconds % 60
-    cs = int(round((s - int(s)) * 100))
-    return f"{h}:{m:02d}:{int(s):02d}.{cs:02d}"
+    """Converte segundos para o formato ASS H:MM:SS.cc (sem overflow de centésimos)."""
+    total_cs = int(round(max(0.0, seconds) * 100))
+    h, rem = divmod(total_cs, 360_000)
+    m, rem = divmod(rem, 6_000)
+    s, cs = divmod(rem, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
 def _group_words(words: list[dict], max_words: int = 7) -> list[list[dict]]:
@@ -138,6 +139,33 @@ def generate_ass(
             f.write(ev + "\n")
 
     logger.info("ASS gerado: %s (%d linhas, estilo=%s)", output_ass, len(events), style)
+    return output_ass
+
+
+def generate_static_ass(
+    text: str,
+    duration: float,
+    output_ass: str,
+    *,
+    style: str = "tiktok",
+    width: int = 1080,
+    height: int = 1920,
+) -> str:
+    """Gera um .ass com um único texto estático visível durante todo o clip."""
+    if style not in _STYLES:
+        style = "tiktok"
+
+    header = _ass_header(width, height, style)
+    event = (
+        f"Dialogue: 0,{_secs_to_ass(0.0)},{_secs_to_ass(duration)},"
+        f"{style},,0,0,0,,{_ass_escape(text)}"
+    )
+
+    with open(output_ass, "w", encoding="utf-8") as f:
+        f.write(header)
+        f.write(event + "\n")
+
+    logger.info("ASS estático gerado: %s (estilo=%s)", output_ass, style)
     return output_ass
 
 

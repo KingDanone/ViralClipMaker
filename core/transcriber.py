@@ -41,26 +41,9 @@ def release_model_cache() -> None:
 
 
 def _get_duration(video_path: str) -> float:
-    """Obtém duração do vídeo via ffmpeg (~0.1s)."""
-    from core.runtime import get_ffmpeg_path
-    ffmpeg = get_ffmpeg_path()
-    cmd = [
-        ffmpeg, "-i", video_path,
-        "-f", "null", "-",
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    for line in result.stderr.splitlines():
-        if "Duration:" in line:
-            try:
-                duration_str = line.split("Duration:")[1].split(",")[0].strip()
-                parts = duration_str.split(":")
-                hours = float(parts[0])
-                minutes = float(parts[1])
-                seconds = float(parts[2])
-                return hours * 3600 + minutes * 60 + seconds
-            except (IndexError, ValueError):
-                pass
-    return 0.0
+    """Obtém duração do vídeo lendo apenas o header (sem decodificar)."""
+    from core.ffprobe import probe_duration
+    return probe_duration(video_path)
 
 
 def _audio_to_numpy(video_path: str, sr: int = 22050) -> np.ndarray:
