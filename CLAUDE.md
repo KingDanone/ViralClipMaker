@@ -207,13 +207,14 @@ ViralClipMaker/
 
 > Status: `[ ]` = pendente | `[x]` = concluído | `[~]` = parcial
 
-### v1.0.1 (patch) — Correção de legendas
-- [ ] `WrapStyle 0` (quebra inteligente) + grupos de 3–4 palavras por linha de karaokê
-- [ ] Margens L/R maiores + `MarginV`/fonte proporcionais à resolução de saída (1080x1920 e 720x1280)
-- [ ] Posição de legenda configurável (base / terço inferior / meio) e respeito à safe-zone do TikTok/Reels
-- [ ] Mesmo tratamento no ASS estático do `/edit`
-- [ ] favicon (eliminar 404 do console)
-- [ ] Validação visual via extração de frames (protocolo já usado na recepção)
+### v1.0.1 (patch) — Correção de legendas ✅ (07/10/2026)
+- [x] `WrapStyle 0` (quebra inteligente) + grupos de 4 palavras por linha de karaokê (era 7)
+- [x] Margens L/R maiores (80px @1080) + `MarginV`/fonte proporcionais à resolução de saída (1080x1920 e 720x1280)
+- [x] Posição de legenda configurável (base / terço inferior / meio; padrão: terço) — UI, API, batch e CLI (`--caption-position`)
+- [x] Mesmo tratamento no ASS estático do `/edit`
+- [x] favicon (eliminar 404 do console)
+- [x] Validação visual via extração de frames: 1080p/third, 720p/middle e E2E web (YouTube→UI) — legendas contidas no quadro, bug antigo (WrapStyle 2) visível cortado no vídeo-fonte ♻ comprovação do fix
+- [x] Correção agregada: `generate_ass` agora recebe a resolução real (antes PlayRes fixo 1080x1920 mesmo em saídas 720p)
 
 ### v1.1.0 (minor) — Manutenção de deps + Caption Studio Lite (T1)
 - [ ] `tools/update_deps.py`: allowlist + canário YouTube + venv temp + bump de pin com changelog (+ `make update-deps` opcional)

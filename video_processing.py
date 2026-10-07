@@ -111,6 +111,7 @@ def generate_clips(
     y_offset=None,
     zoom_factor=1.0,
     auto_zoom=False,
+    caption_position="third",
 ):
     """
     Gera clips usando pipeline FFmpeg unificado com processamento paralelo.
@@ -153,7 +154,11 @@ def generate_clips(
                     for w in words
                 ]
                 ass_path = os.path.join(upload_folder, f"subs_{uuid.uuid4()}.ass")
-                generate_ass(shifted, ass_path, style=subtitle_style)
+                generate_ass(
+                    shifted, ass_path,
+                    style=subtitle_style, width=out_w, height=out_h,
+                    position=caption_position,
+                )
 
         output_path = os.path.join(upload_folder, f"clip_{uuid.uuid4()}.mp4")
 
