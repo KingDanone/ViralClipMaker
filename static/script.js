@@ -17,6 +17,7 @@ function app() {
         cropPosition: 'center',
         zoomFactor: 1.0,
         autoZoom: false,
+        captionPosition: 'third',
         subtitleStyle: 'tiktok',
         outW: 1080,
         outH: 1920,
@@ -57,6 +58,11 @@ function app() {
             { value: 'left', label: 'Esquerda', icon: '←' },
             { value: 'center', label: 'Centro', icon: '•' },
             { value: 'right', label: 'Direita', icon: '→' },
+        ],
+        captionPositions: [
+            { value: 'bottom', label: 'Base' },
+            { value: 'third', label: 'Terço inferior' },
+            { value: 'middle', label: 'Meio' },
         ],
         resolutions: [
             { value: 'tiktok', label: 'TikTok', w: 1080, h: 1920 },
@@ -129,6 +135,7 @@ function app() {
                 formData.append('crop_position', this.cropPosition);
                 formData.append('zoom_factor', this.zoomFactor);
                 formData.append('auto_zoom', this.autoZoom);
+                formData.append('caption_position', this.captionPosition);
                 formData.append('subtitle_style', this.subtitleStyle);
                 formData.append('output_width', this.outW);
                 formData.append('output_height', this.outH);

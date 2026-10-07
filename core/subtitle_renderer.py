@@ -60,6 +60,37 @@ def _ass_escape(text: str) -> str:
     return text.replace("{", "\\{").replace("}", "\\}")
 
 
+# ── Posicionamento e safe area ───────────────────────────────────────────
+
+# Posição vertical da legenda como fração da altura do vídeo (a partir da base).
+# "third" mantém a legenda no terço inferior, fora da área de UI do TikTok/Reels.
+_POSITIONS = {
+    "bottom": 0.06,
+    "third": 0.18,
+    "middle": 0.45,
+}
+_DEFAULT_POSITION = "third"
+
+# Margem lateral de segurança (canvas 1080 de largura) — evita a coluna de
+# botões do TikTok/Reels à direita e o corte nas bordas.
+_MARGIN_LR_AT_1080 = 80
+_REF_WIDTH = 1080
+
+
+def _scaled_fontsize(base: int, width: int) -> int:
+    """Fonte proporcional à largura do canvas (styles são calibrados p/ 1080)."""
+    return max(12, int(round(base * width / _REF_WIDTH)))
+
+
+def _margin_lr(width: int) -> int:
+    return max(20, int(round(_MARGIN_LR_AT_1080 * width / _REF_WIDTH)))
+
+
+def _margin_v(position: str, height: int) -> int:
+    frac = _POSITIONS.get(position, _POSITIONS[_DEFAULT_POSITION])
+    return int(round(height * frac))
+
+
 def _secs_to_ass(seconds: float) -> str:
     """Converte segundos para o formato ASS H:MM:SS.cc (sem overflow de centésimos)."""
     total_cs = int(round(max(0.0, seconds) * 100))
@@ -69,7 +100,10 @@ def _secs_to_ass(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-def _group_words(words: list[dict], max_words: int = 7) -> list[list[dict]]:
+def _group_words(words: list[dict], max_words: int = 4) -> list[list[dict]]:
+    """Agrupa palavras por linha de karaokê (padrão TikTok: 3–4 palavras)."""
+    if max_words < 1:
+        max_words = 4
     groups = []
     current = []
     for w in words:
@@ -82,17 +116,20 @@ def _group_words(words: list[dict], max_words: int = 7) -> list[list[dict]]:
     return groups
 
 
-def _ass_header(width: int, height: int, style_name: str) -> str:
+def _ass_header(width: int, height: int, style_name: str, position: str = _DEFAULT_POSITION) -> str:
     s = _STYLES.get(style_name, _STYLES["tiktok"])
+    fontsize = _scaled_fontsize(s["fontsize"], width)
+    margin_lr = _margin_lr(width)
+    margin_v = _margin_v(position, height)
     return f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
-WrapStyle: 2
+WrapStyle: 0
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style:{style_name},{s["font"]},{s["fontsize"]},{s["primary"]},{s["secondary"]},{s["outline"]},&H00000000,{s["bold"]},0,0,0,100,100,0,0,1,{s["outline_w"]},{s["shadow"]},2,50,50,{s["margin_v"]},1
+Style:{style_name},{s["font"]},{fontsize},{s["primary"]},{s["secondary"]},{s["outline"]},&H00000000,{s["bold"]},0,0,0,100,100,0,0,1,{s["outline_w"]},{s["shadow"]},2,{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -100,9 +137,9 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 
 
 def _words_to_ass_events(
-    words: list[dict], style_name: str
+    words: list[dict], style_name: str, max_words: int = 4
 ) -> list[str]:
-    groups = _group_words(words, max_words=7)
+    groups = _group_words(words, max_words=max_words)
     events = []
     for group in groups:
         g_start = group[0]["start"]
@@ -126,12 +163,14 @@ def generate_ass(
     style: str = "tiktok",
     width: int = 1080,
     height: int = 1920,
+    position: str = _DEFAULT_POSITION,
+    max_words: int = 4,
 ) -> str:
     if style not in _STYLES:
         style = "tiktok"
 
-    header = _ass_header(width, height, style)
-    events = _words_to_ass_events(words, style)
+    header = _ass_header(width, height, style, position=position)
+    events = _words_to_ass_events(words, style, max_words=max_words)
 
     with open(output_ass, "w", encoding="utf-8") as f:
         f.write(header)
@@ -150,12 +189,13 @@ def generate_static_ass(
     style: str = "tiktok",
     width: int = 1080,
     height: int = 1920,
+    position: str = _DEFAULT_POSITION,
 ) -> str:
     """Gera um .ass com um único texto estático visível durante todo o clip."""
     if style not in _STYLES:
         style = "tiktok"
 
-    header = _ass_header(width, height, style)
+    header = _ass_header(width, height, style, position=position)
     event = (
         f"Dialogue: 0,{_secs_to_ass(0.0)},{_secs_to_ass(duration)},"
         f"{style},,0,0,0,,{_ass_escape(text)}"

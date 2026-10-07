@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ViralClipMaker</title>
+    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -203,6 +204,20 @@
                             </button>
                         </template>
                     </div>
+                </div>
+
+                <!-- Caption Position -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Posição da Legenda</label>
+                    <div class="flex gap-2">
+                        <template x-for="p in captionPositions" :key="p.value">
+                            <button @click="captionPosition = p.value"
+                                    :class="captionPosition === p.value ? 'bg-violet-600 text-white ring-2 ring-violet-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                                    class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all"
+                                    x-text="p.label"></button>
+                        </template>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1.5">Terço inferior evita sobrepor os botões do TikTok/Reels</p>
                 </div>
             </div>
 

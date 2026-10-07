@@ -73,6 +73,12 @@ def main():
         help="Zoom automático em momentos de alta energia",
     )
     parser.add_argument(
+        "--caption-position",
+        default="third",
+        choices=["bottom", "third", "middle"],
+        help="Posição vertical da legenda (padrão: third = terço inferior)",
+    )
+    parser.add_argument(
         "--output", "-o",
         default="output",
         help="Diretório de saída (padrão: output/)",
@@ -129,6 +135,7 @@ def main():
         subtitle_style=args.style,
         out_w=w, out_h=h,
         auto_zoom=args.auto_zoom,
+        caption_position=args.caption_position,
         **crop_params,
     )
 

@@ -152,6 +152,13 @@ ViralClipMaker/
 - **Transcrição adaptativa**: vídeos > 30min usam transcrição seletiva (top 50% por energia RMS).
 - **Sem MoviePy/ImageMagick**: `/edit` usa FFmpeg (ASS estático + `hue=s=0`).
 
+### Decisões da recepção — 02/10/2026 (nova equipe)
+
+- **Editor de legendas (direção: "CapCut-lite")**: preview fiel no browser via **JavascriptSubtitlesOctopus** (libass→WASM, MIT — mesmo renderer que o FFmpeg usa para queimar ASS, então preview ≈ resultado final). Re-render = regenerar ASS + `export_clip` (1 encode/clip). Dados já existem: `clip.segments` com word timestamps relativos.
+- **Retenção do original**: para re-render de legenda, o vídeo original passa a ser mantido em **workspace de sessão** (`outputs/sessions/<uuid>/`) com **TTL 24h** (zelador de uploads já existente cobre). Sem isso, edição exige reprocessar do zero.
+- **Manutenção de deps voláteis**: **script local** `tools/update_deps.py` — allowlist fechada (`yt-dlp`, `yt-dlp-ejs`), canário funcional (download de vídeo de referência do YouTube + smoke ffmpeg/node) em venv temporário; **só atualiza o pin se o canário passar**; nunca descongela versões; falha → aborta e reporta. CI canário (GitHub Actions semanal) fica para quando houver suíte de testes. Deps de infra (fastapi/numpy/mediapipe/librosa) **nunca** bump automático sem testes.
+- **Correção de legendas cortadas**: causa raiz = `WrapStyle: 2` (sem quebra) + grupos de 7 palavras × fonte 68 em PlayResX 1080 → overflow. Fix: WrapStyle 0, grupos 3–4 palavras, margens L/R maiores, fonte proporcional à saída, posição configurável, safe-zone TikTok (lateral direita/base).
+
 ---
 
 ## ROADMAP — FASES E TAREFAS
@@ -193,6 +200,40 @@ ViralClipMaker/
 - [x] Zoom automático integrado ao pipeline (21/09 — era código morto)
 - [x] CLI funcional e desacoplado do backend web
 - [~] Instalador via PyInstaller: spec corrigido (scipy OK, ffmpeg/mediapipe embutidos), **build não verificado E2E**
+
+---
+
+## RELEASES PLANEJADAS (decidido em 02/10/2026 — recepção/nova equipe)
+
+> Status: `[ ]` = pendente | `[x]` = concluído | `[~]` = parcial
+
+### v1.0.1 (patch) — Correção de legendas ✅ (07/10/2026)
+- [x] `WrapStyle 0` (quebra inteligente) + grupos de 4 palavras por linha de karaokê (era 7)
+- [x] Margens L/R maiores (80px @1080) + `MarginV`/fonte proporcionais à resolução de saída (1080x1920 e 720x1280)
+- [x] Posição de legenda configurável (base / terço inferior / meio; padrão: terço) — UI, API, batch e CLI (`--caption-position`)
+- [x] Mesmo tratamento no ASS estático do `/edit`
+- [x] favicon (eliminar 404 do console)
+- [x] Validação visual via extração de frames: 1080p/third, 720p/middle e E2E web (YouTube→UI) — legendas contidas no quadro, bug antigo (WrapStyle 2) visível cortado no vídeo-fonte ♻ comprovação do fix
+- [x] Correção agregada: `generate_ass` agora recebe a resolução real (antes PlayRes fixo 1080x1920 mesmo em saídas 720p)
+
+### v1.1.0 (minor) — Manutenção de deps + Caption Studio Lite (T1)
+- [ ] `tools/update_deps.py`: allowlist + canário YouTube + venv temp + bump de pin com changelog (+ `make update-deps` opcional)
+- [ ] Workspace de sessão com retenção do original (TTL 24h)
+- [ ] **Caption Studio Lite** por clip: cartões de legenda editáveis (texto), timing por cartão, palavras-por-linha (2–5), posição, estilo/cor/tamanho
+- [ ] Preview live no browser via JavascriptSubtitlesOctopus (assets WASM servidos localmente, sem CDN externo)
+- [ ] Rota de re-render: `POST /clips/rerender` (session+clip+captions+style → export_clip 1 encode)
+
+### v1.2.0 — Estabilidade & segurança
+- [ ] Suíte `pytest` mínima (promover o canário e smokes da recepção; `core/` puro: timestamps, SRT/VTT, NMS, filtros)
+- [ ] CI canário semanal (Opção B) + Dependabot só para deps de infra com testes verdes
+- [ ] Bind padrão `127.0.0.1` + flag `--host` explícita; validação de path no `/edit`
+- [ ] lockfile de dependências (`requirements.lock` via pip freeze)
+
+### v2.0.0 (horizonte) — precisa de spec de UX antes
+- [ ] Editor de Timeline completo (onda de áudio, arrastar cartões, split/merge, highlight por palavra) — T2
+- [ ] UI do modo batch
+- [ ] Build PyInstaller validado E2E e pipeline de distribuição
+- [ ] (fora de escopo permanente: NLE genérico — trim/transições/efeitos. O produto é clipes+legendas.)
 
 ---
 

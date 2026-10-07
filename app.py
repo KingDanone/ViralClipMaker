@@ -95,6 +95,7 @@ def _process_pipeline(
     output_width: int,
     output_height: int,
     auto_zoom: bool,
+    caption_position: str = "third",
 ) -> list[dict]:
     """Pipeline completo: transcrição → seleção → (auto-crop) → geração de clips."""
     transcription = transcribe(video_path, model_size=whisper_model)
@@ -118,7 +119,7 @@ def _process_pipeline(
         video_path, segments, UPLOAD_FOLDER,
         transcription=transcription, subtitle_style=subtitle_style,
         out_w=output_width, out_h=output_height,
-        auto_zoom=auto_zoom, **params,
+        auto_zoom=auto_zoom, caption_position=caption_position, **params,
     )
 
     # Sidecar de transcrição por clip (fallback do /export-subtitles)
@@ -191,6 +192,7 @@ async def process_video(
     output_width: int = Form(1080),
     output_height: int = Form(1920),
     auto_zoom: bool = Form(False),
+    caption_position: str = Form("third"),
 ):
     video_path = None
     try:
@@ -211,6 +213,7 @@ async def process_video(
             output_width=output_width,
             output_height=output_height,
             auto_zoom=auto_zoom,
+            caption_position=caption_position,
         )
     except Exception as e:
         _cleanup_input(video_path)
@@ -233,6 +236,7 @@ async def process_stream(
     output_width: int = Form(1080),
     output_height: int = Form(1920),
     auto_zoom: bool = Form(False),
+    caption_position: str = Form("third"),
 ):
     """Processa vídeo com progresso em tempo real via SSE."""
 
@@ -273,6 +277,7 @@ async def process_stream(
                 output_width=output_width,
                 output_height=output_height,
                 auto_zoom=auto_zoom,
+                caption_position=caption_position,
             )
         except Exception as e:
             _cleanup_input(video_path)
@@ -429,6 +434,7 @@ async def batch_process(request: Request):
     )
     output_width = int(data.get("output_width", 1080))
     output_height = int(data.get("output_height", 1920))
+    caption_position = data.get("caption_position", "third")
 
     def process_batch():
         with _batch_lock:
@@ -448,6 +454,7 @@ async def batch_process(request: Request):
                     output_width=output_width,
                     output_height=output_height,
                     auto_zoom=False,
+                    caption_position=caption_position,
                 )
                 item["status"] = "done"
                 item["progress"] = 100

@@ -10,6 +10,7 @@ Transforms long videos into short viral clips (TikTok, Reels, Shorts) with capti
 - **Virality Score**: Multi-factor analysis (sentiment PT-BR/EN, audio energy, viral hooks, speech density) with overlap suppression — every clip is a distinct moment
 - **9:16 Reframe**: Crop, letterbox, or blur padding for TikTok/Reels format
 - **Animated Captions**: Word-by-word karaoke subtitles (4 styles: TikTok, Bold, Neon, Minimal)
+- **Caption Position**: Bottom, lower-third, or middle — with TikTok/Reels safe-zone margins
 - **Camera Tracking**: Auto-detect faces and follow them (MediaPipe)
 - **Crop Control**: Position (left/center/right/auto) and zoom (1.0x–2.0x)
 - **Auto Zoom**: Automatic zoom boost on high-energy moments (optional)
@@ -76,6 +77,7 @@ python -m viralclip video.mp4 --resolution 720x1280 --crop left --auto-zoom
 | `--crop` | Crop position (left, center, right, auto) | center |
 | `--zoom` | Zoom factor (1.0-2.0) | 1.0 |
 | `--auto-zoom` | Zoom boost on high-energy moments | off |
+| `--caption-position` | Caption position (bottom, third, middle) | third |
 | `--resolution` | Output resolution WxH | 1080x1920 |
 | `--output, -o` | Output directory | output/ |
 
